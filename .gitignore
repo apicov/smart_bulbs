@@ -1,0 +1,10 @@
+# editors / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+# never commit credentials
+*.local
+.env
+.env.*
+!.env.example

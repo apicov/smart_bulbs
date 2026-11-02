@@ -1,0 +1,60 @@
+menu "Pico Bulb"
+
+config BULB_ID
+    string "Bulb id (empty = derived from MAC, e.g. bulb-a1b2c3)"
+    default ""
+    help
+        Used in MQTT topics (pico/bulb/<id>/...) and as the MQTT username,
+        so the broker ACL can restrict each bulb to its own topics.
+        A readable name like "living-room" is recommended.
+
+config BULB_WIFI_SSID
+    string "WiFi SSID"
+
+config BULB_WIFI_PASSWORD
+    string "WiFi password"
+
+config BULB_MQTT_URI
+    string "MQTT broker URI"
+    default "mqtts://broker.example.com:8883"
+    help
+        mqtts:// is verified against the built-in CA bundle (Let's Encrypt ok).
+
+config BULB_MQTT_PASSWORD
+    string "MQTT password (username is the bulb id)"
+    default ""
+
+config BULB_TOPIC_PREFIX
+    string "MQTT topic prefix"
+    default "pico/bulb"
+
+config BULB_LED_GPIO
+    int "LED strip data GPIO"
+    default 18
+    help
+        Avoid strapping pins 4, 5, 8, 9, 15. GPIO8 drives the onboard RGB LED.
+
+config BULB_LED_COUNT
+    int "Number of LEDs"
+    range 1 1024
+    default 24
+
+config BULB_MAX_MILLIAMPS
+    int "Strip current limit in mA (0 = unlimited)"
+    default 1000
+    help
+        Frames are scaled down so the estimated draw stays below this.
+        Size it to your 5V supply.
+
+config BULB_PIR_GPIO
+    int "PIR sensor GPIO (-1 = no sensor)"
+    default 19
+
+config BULB_POWER_ON_LIGHT
+    bool "Turn light on at power-up (wall-switch friendly)"
+    default y
+    help
+        If enabled, the bulb lights up with its last colour/brightness when
+        power returns. If disabled, it restores its last on/off state too.
+
+endmenu

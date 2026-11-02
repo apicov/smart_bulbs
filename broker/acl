@@ -1,0 +1,8 @@
+# /etc/mosquitto/acl — Pico Bulbs
+# The app sees and controls everything under pico/
+user app
+topic readwrite pico/#
+
+# Every bulb logs in with username == bulb id and may only touch its own subtree:
+#   pico/bulb/<id>/{status,state,set,motion}
+pattern readwrite pico/bulb/%u/#
