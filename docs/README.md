@@ -7,7 +7,7 @@ This guide takes you from nothing to a working smart bulb. Follow the steps in o
 | 1 | [Hardware & wiring](01-wiring.md) | A C6-Zero with LED strip and PIR sensor on the bench |
 | 2 | [Broker on the server](02-broker.md) | Mosquitto with TLS at `mqtt.apicov.xyz` |
 | 3 | [Firmware: configure, flash, test](03-firmware.md) | A bulb that you control with `mosquitto_pub` |
-| 4 | App | *(coming next)* |
+| 4 | [App](04-app.md) | Control your bulbs from a phone or browser |
 
 ## How it fits together
 

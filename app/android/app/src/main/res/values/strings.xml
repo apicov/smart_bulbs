@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pico Bulbs</string>
+    <string name="title_activity_main">Pico Bulbs</string>
+    <string name="package_name">xyz.apicov.bulbs</string>
+    <string name="custom_url_scheme">xyz.apicov.bulbs</string>
+</resources>

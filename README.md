@@ -8,7 +8,7 @@ DIY smart bulbs: an **ESP32-C6-Zero** drives a NeoPixel strip and reads a PIR se
 |-------------|------|
 | `firmware/` | ESP-IDF 6.0 project for the bulb: light engine (fades, gamma, current limit), PIR sensor, MQTT over TLS, state saved in NVS |
 | `broker/`   | Mosquitto config, ACL and `setup-server.sh` for the Fedora server; `dev/` runs a local test broker |
-| `app/`      | Control app (to come) |
+| `app/`      | Capacitor + React + MUI control app (web and Android): bulb list, power, brightness, palette, colour picker |
 | `docs/`     | Step-by-step setup guide and wiring |
 
 ## MQTT topics
