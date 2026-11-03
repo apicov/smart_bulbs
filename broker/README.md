@@ -89,8 +89,8 @@ Run these from any machine with `mosquitto-clients` installed:
 
 ```sh
 H=mqtt.example.com
-# Fedora: CA="--cafile /etc/pki/tls/certs/ca-bundle.crt"   Debian/Ubuntu: CA="--capath /etc/ssl/certs"
-CA="--cafile /etc/pki/tls/certs/ca-bundle.crt"
+# Fedora: CA="--cafile /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"   Debian/Ubuntu: CA="--capath /etc/ssl/certs"
+CA="--cafile /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
 # Watch everything as the app user
 mosquitto_sub -h $H -p 8883 $CA -u app -P '…' -t 'pico/#' -v
 

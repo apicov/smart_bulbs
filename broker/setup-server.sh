@@ -161,10 +161,13 @@ ok "mosquitto enabled and running"
 
 # ---------------------------------------------------------------- 7. self-test
 step "7. Self-test against $DOMAIN"
-# Fedora ships one CA bundle file; --capath /etc/ssl/certs only works where
-# individual hashed certs exist (Debian/Ubuntu).
-if [[ -f /etc/pki/tls/certs/ca-bundle.crt ]]; then CA=(--cafile /etc/pki/tls/certs/ca-bundle.crt)
-else CA=(--capath /etc/ssl/certs); fi
+# Use a CA bundle file: --capath /etc/ssl/certs only works where individual
+# hashed certs exist (Debian/Ubuntu). Fedora 44 dropped /etc/pki/tls/certs/ca-bundle.crt.
+CA=(--capath /etc/ssl/certs)
+for f in /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem /etc/ssl/certs/ca-bundle.crt \
+         /etc/pki/tls/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt; do
+  if [[ -f $f ]]; then CA=(--cafile "$f"); break; fi
+done
 if ((${#NEW_CREDS[@]})); then
   { echo "# $(date -Is) pico-bulbs MQTT users (user  password)"; printf '%s\n' "${NEW_CREDS[@]}"; } >>"$CREDS"
   chmod 600 "$CREDS"
