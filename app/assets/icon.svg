@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b2017"/><stop offset="1" stop-color="#110d0a"/></linearGradient></defs><rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+  <g transform="translate(512 391.6) scale(0.86)">
+  <defs>
+    <radialGradient id="glass" cx="0" cy="-40" r="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff3c4"/>
+      <stop offset="0.45" stop-color="#ffc85a"/>
+      <stop offset="1" stop-color="#e0841c"/>
+    </radialGradient>
+    <linearGradient id="metal" x1="-130" y1="0" x2="130" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8d857a"/>
+      <stop offset="0.35" stop-color="#e4ddd2"/>
+      <stop offset="1" stop-color="#7a7268"/>
+    </linearGradient>
+    <filter id="blur" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="70"/></filter>
+  </defs>
+  <!-- glow -->
+  <circle cx="0" cy="10" r="300" fill="#ffb347" opacity="0.55" filter="url(#blur)"/>
+  <!-- glass -->
+  <path d="M -110 300 C -110 225 -230 170 -230 0 A 230 230 0 1 1 230 0 C 230 170 110 225 110 300 Z" fill="url(#glass)"/>
+  <!-- filament -->
+  <path d="M -55 300 L -55 140 Q -55 80 -22 100 Q 0 160 22 100 Q 55 80 55 140 L 55 300"
+        fill="none" stroke="#fffaf0" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <!-- highlight -->
+  <path d="M -165 -40 A 170 170 0 0 1 -60 -175" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round" opacity="0.45"/>
+  <!-- screw base -->
+  <rect x="-122" y="305" width="244" height="46" rx="20" fill="url(#metal)"/>
+  <rect x="-116" y="358" width="232" height="46" rx="20" fill="url(#metal)"/>
+  <rect x="-108" y="411" width="216" height="46" rx="20" fill="url(#metal)"/>
+  <path d="M -70 462 L 70 462 Q 60 505 0 510 Q -60 505 -70 462 Z" fill="#5f584f"/>
+  </g>
+</svg>
