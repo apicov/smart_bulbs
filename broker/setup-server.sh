@@ -161,13 +161,17 @@ ok "mosquitto enabled and running"
 
 # ---------------------------------------------------------------- 7. self-test
 step "7. Self-test against $DOMAIN"
+# Fedora ships one CA bundle file; --capath /etc/ssl/certs only works where
+# individual hashed certs exist (Debian/Ubuntu).
+if [[ -f /etc/pki/tls/certs/ca-bundle.crt ]]; then CA=(--cafile /etc/pki/tls/certs/ca-bundle.crt)
+else CA=(--capath /etc/ssl/certs); fi
 if ((${#NEW_CREDS[@]})); then
   { echo "# $(date -Is) pico-bulbs MQTT users (user  password)"; printf '%s\n' "${NEW_CREDS[@]}"; } >>"$CREDS"
   chmod 600 "$CREDS"
 fi
 app_pw="$(awk '$1=="app"{p=$2} END{print p}' "$CREDS" 2>/dev/null || true)"
 if [[ -n $app_pw ]]; then
-  if timeout 10 mosquitto_pub -h "$DOMAIN" -p 8883 --capath /etc/ssl/certs \
+  if timeout 10 mosquitto_pub -h "$DOMAIN" -p 8883 "${CA[@]}" \
        -u app -P "$app_pw" -t pico/setup-test -m ok; then
     ok "TLS login as app on 8883 works"
   else
@@ -176,7 +180,7 @@ if [[ -n $app_pw ]]; then
 else
   ok "app password not in $CREDS — skipping login test"
 fi
-if timeout 10 mosquitto_pub -h "$DOMAIN" -p 8883 --capath /etc/ssl/certs -t pico/x -m x 2>/dev/null; then
+if timeout 10 mosquitto_pub -h "$DOMAIN" -p 8883 "${CA[@]}" -t pico/x -m x 2>/dev/null; then
   die "anonymous publish was ACCEPTED — check allow_anonymous"
 else
   ok "anonymous access refused"
@@ -192,3 +196,4 @@ if ((${#NEW_CREDS[@]})); then
   echo "      CONFIG_BULB_ID=\"<user>\"  CONFIG_BULB_MQTT_PASSWORD=\"<password>\""
   echo "      CONFIG_BULB_MQTT_URI=\"mqtts://$DOMAIN:8883\""
 fi
+echo "    All MQTT passwords created so far: sudo cat $CREDS"

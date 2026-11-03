@@ -89,18 +89,20 @@ Run these from any machine with `mosquitto-clients` installed:
 
 ```sh
 H=mqtt.example.com
+# Fedora: CA="--cafile /etc/pki/tls/certs/ca-bundle.crt"   Debian/Ubuntu: CA="--capath /etc/ssl/certs"
+CA="--cafile /etc/pki/tls/certs/ca-bundle.crt"
 # Watch everything as the app user
-mosquitto_sub -h $H -p 8883 --capath /etc/ssl/certs -u app -P '…' -t 'pico/#' -v
+mosquitto_sub -h $H -p 8883 $CA -u app -P '…' -t 'pico/#' -v
 
 # Anonymous access must be refused
-mosquitto_sub -h $H -p 8883 --capath /etc/ssl/certs -t '#'        # → "not authorised"
+mosquitto_sub -h $H -p 8883 $CA -t '#'        # → "not authorised"
 
 # A bulb must not be able to write to another bulb's topics (the message is silently dropped)
-mosquitto_pub -h $H -p 8883 --capath /etc/ssl/certs -u living-room -P '…' \
+mosquitto_pub -h $H -p 8883 $CA -u living-room -P '…' \
   -t pico/bulb/kitchen/set -m '{"state":"OFF"}'
 
 # Drive a bulb by hand
-mosquitto_pub -h $H -p 8883 --capath /etc/ssl/certs -u app -P '…' \
+mosquitto_pub -h $H -p 8883 $CA -u app -P '…' \
   -t pico/bulb/living-room/set -m '{"state":"ON","color":{"r":255,"g":0,"b":0},"brightness":100}'
 ```
 
