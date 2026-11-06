@@ -1,72 +1,44 @@
 #pragma once
 #include <atomic>
-#include <cstring>
-#include <functional>
-#include <vector>
-
+#include <cstdint>
+#include "Callback.hpp"
+#include "esp_err.h"
 #include "esp_event.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
-#include "esp_log.h"
-
 
 /**
  * @brief A thin wrapper around the ESP-IDF "esp_wifi" for quick use.
  *
- * This class provides a simplified interface for managing WiFi connections
- * using the ESP-IDF framework. It allows for event handling and connection
- * management.
+ * Connects in station mode and keeps retrying whenever the connection drops,
+ * waiting longer between attempts while the network stays unreachable.
+ * Start it only once: it sets up the process-wide network stack.
  */
 class WiFiStation {
 public:
-    /**
-     * @brief Type definition for WiFi event callback functions.
-     *
-     * This is a function object type that can be registered for WiFi events.
-     */
-    using WifiEventCallback = std::function<void(void*)>;
+    using ConnectedCallback = Callback<void()>;
+
+    WiFiStation() = default;
+    WiFiStation(const WiFiStation&) = delete;
+    WiFiStation& operator=(const WiFiStation&) = delete;
 
     /**
-     * @brief Startup the WiFi in station mode.
+     * @brief Start connecting to the given network.
      *
-     * If called more than once, it'll initialize the station only
-     * once and will return the same instance after each call.
-     *
-     * @param ssid The SSID of the WiFi network.
-     * @param password The password for the WiFi network.
-     *
-     * @return The instance of the WiFiStation.
+     * @param on_connected Called from the event task each time an IP is obtained.
      */
-    static WiFiStation& start(const char*, const char*);
-
-    /**
-     * @brief Register a callback on a connection event.
-     *
-     * @param The callback to execute.
-     *
-     */
-    void on_connect(WifiEventCallback);
-
-    /**
-     * @brief Check if the WiFi is connected.
-     *
-     * This method checks the current connection status of the WiFi.
-     *
-     * @return true if the WiFi is connected, false otherwise.
-     */
-    bool is_connected() const;
+    [[nodiscard]] esp_err_t start(const char* ssid, const char* password, ConnectedCallback on_connected);
 
 private:
     static constexpr const char* TAG = "wifi_station";
-    static WiFiStation* instance;
-    const char* ssid_; ///< The SSID of the WiFi network.
-    const char* password_; ///< The password for the WiFi network.
-    std::atomic<bool> is_connected_; ///< Atomic flag indicating connection status.
-    std::vector<WifiEventCallback> on_connect_cb;
+    static constexpr uint32_t MIN_RETRY_DELAY_S = 1;
+    static constexpr uint32_t MAX_RETRY_DELAY_S = 30;
 
-    WiFiStation(const char* ssid, const char* password);
-    WiFiStation() = delete;
-    WiFiStation& operator=(WiFiStation const&) = delete;
+    ConnectedCallback on_connected_;
+    esp_timer_handle_t retry_timer_ = nullptr;
+    std::atomic<uint32_t> retry_delay_s_{MIN_RETRY_DELAY_S};  // used by the event and timer tasks
 
-    static void event_handler(void* , esp_event_base_t, int32_t, void*);
-    void handle(esp_event_base_t , int32_t, void*);
+    void handle(esp_event_base_t base, int32_t id, void* data);
+    void connect();
+    void schedule_retry();
 };

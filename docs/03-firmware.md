@@ -44,8 +44,11 @@ main: Bulb id: living-room (topics pico/bulb/living-room/*)
 light_engine: Started: 24 LEDs on GPIO18, limit 450 mA     ← strip fades up to warm white
 wifi_station: Got IP 192.168.x.x
 mqtt_client: Connected to broker
+main: Lowest free stack: light 2800 B, pir 1500 B          ← your numbers will differ
 pir: motion detected                                       ← wave at the sensor
 ```
+
+The stack line repeats on every MQTT connect, and its numbers can only fall. If either drops below about 500 B, increase that task's `TASK_STACK_BYTES`. If it stays large after days of use, you can reduce it to save RAM.
 
 ## Test without the app
 
@@ -64,6 +67,25 @@ mosquitto_pub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/set \
   -m '{"state":"ON","color":{"r":255,"g":0,"b":0},"brightness":100,"transition":1}'
 
 mosquitto_pub … -m '{"state":"OFF","transition":3}'     # slow fade out
+```
+
+## Test without a board
+
+The fade, gamma, current-limit and JSON logic has no ESP-IDF dependency, so its unit tests run on your PC. They need `g++` with C++23 support and CMake, and cJSON from `managed_components`, which appears after your first `idf.py build`. Run them in a shell where ESP-IDF is **not** activated, because its tools on `PATH` break the host compiler.
+
+```sh
+cd firmware
+cmake -S tests/host -B tests/host/build
+cmake --build tests/host/build
+ctest --test-dir tests/host/build --output-on-failure
+```
+
+## Check the code style
+
+After `idf.py build`, this runs `clang-format` and `clang-tidy` on the firmware's own code. Both tools come with ESP-IDF. It exits non-zero if either reports a problem, and `--fix-format` reformats the files for you.
+
+```sh
+python tools/lint.py
 ```
 
 ## Troubleshooting

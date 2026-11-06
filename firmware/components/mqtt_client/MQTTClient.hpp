@@ -1,58 +1,66 @@
 #pragma once
 #include <atomic>
-#include <functional>
-#include <string>
-#include <vector>
-#include "mqtt_client.h"
+#include <string_view>
+#include "Callback.hpp"
+#include "esp_err.h"
 #include "esp_event.h"
-#include "esp_log.h"
+#include "mqtt_client.h"
+
+enum class Qos : int { AtMostOnce = 0, AtLeastOnce = 1 };
 
 /**
  * @brief Thin wrapper around esp-mqtt.
  *
  * Derived from esp32cam_snap's MQTTClient, extended with credentials,
  * client id, Last Will and TLS (mqtts:// / wss://) via the IDF CA bundle.
+ *
+ * Both callbacks run in the esp-mqtt task. The views passed to them are only
+ * valid during the call.
  */
 class MQTTClient {
 public:
-    using MQTTEventCallback = std::function<void(esp_mqtt_event_handle_t)>;
+    using ConnectedCallback = Callback<void()>;
+    using MessageCallback = Callback<void(std::string_view topic, std::string_view payload)>;
 
+    /** esp-mqtt copies these strings, so they only need to outlive start(). */
     struct Config {
-        std::string uri;          ///< e.g. "mqtts://broker.example.com:8883"
-        std::string client_id;    ///< unique per device
-        std::string username;     ///< empty = no auth
-        std::string password;
-        std::string lwt_topic;    ///< empty = no Last Will
-        std::string lwt_message;
+        const char* uri;                 ///< e.g. "mqtts://broker.example.com:8883"
+        const char* client_id;           ///< unique per device
+        const char* username = nullptr;  ///< nullptr = no auth
+        const char* password = nullptr;
+        const char* lwt_topic = nullptr;  ///< nullptr = no Last Will
+        const char* lwt_message = nullptr;
         bool lwt_retain = true;
         int keepalive_s = 15;
     };
 
-    explicit MQTTClient(Config cfg);
+    MQTTClient() = default;
+    MQTTClient(const MQTTClient&) = delete;
+    MQTTClient& operator=(const MQTTClient&) = delete;
 
-    bool is_connected() const;
+    /** Create the client and start connecting. The callbacks are in place before any event fires. */
+    [[nodiscard]] esp_err_t start(const Config& cfg, ConnectedCallback on_connected,
+                                  MessageCallback on_message);
 
-    /** Publish a NUL-terminated payload. Returns msg id, or -1 on failure. */
-    int publish(const char* topic, const char* data, int qos = 0, bool retain = false);
+    /** True once start() has succeeded. Call from the same task as start(). */
+    bool started() const { return client_ != nullptr; }
 
-    esp_err_t subscribe(const char* topic, int qos = 0);
+    bool is_connected() const { return is_connected_.load(); }
 
-    esp_err_t reconnect();
+    /** Queue a payload for sending, from any task. Returns msg id, or -1 on failure. */
+    int publish(const char* topic, std::string_view data, Qos qos = Qos::AtMostOnce, bool retain = false);
 
-    MQTTClient& on_connect(MQTTEventCallback);
-    MQTTClient& on_disconnect(MQTTEventCallback);
-    MQTTClient& on_data_received(MQTTEventCallback);
+    [[nodiscard]] esp_err_t subscribe(const char* topic, Qos qos = Qos::AtMostOnce);
+
+    [[nodiscard]] esp_err_t reconnect();
 
 private:
     static constexpr const char* TAG = "mqtt_client";
 
-    Config cfg_;  ///< owns the strings referenced by the esp-mqtt config
     std::atomic<bool> is_connected_{false};
-    esp_mqtt_client_handle_t mqtt_client_ = nullptr;
-    std::vector<MQTTEventCallback> on_connect_cb;
-    std::vector<MQTTEventCallback> on_disconnect_cb;
-    std::vector<MQTTEventCallback> on_data_received_cb;
+    esp_mqtt_client_handle_t client_ = nullptr;
+    ConnectedCallback on_connected_;
+    MessageCallback on_message_;
 
-    static void event_handler(void*, esp_event_base_t, int32_t, void*);
-    void handle(esp_event_base_t, int32_t, esp_mqtt_event_handle_t);
+    void handle(int32_t id, const esp_mqtt_event_t& event);
 };

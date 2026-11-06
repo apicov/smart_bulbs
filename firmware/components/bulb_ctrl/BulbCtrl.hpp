@@ -1,49 +1,44 @@
 #pragma once
-#include <functional>
-#include <string>
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
-#include "esp_timer.h"
+#include <chrono>
+#include <string_view>
+#include "BulbProtocol.hpp"
+#include "Callback.hpp"
 #include "LightEngine.hpp"
+#include "Mutex.hpp"
+#include "esp_err.h"
+#include "esp_timer.h"
 
 /**
  * Owns the bulb's LightState: applies JSON commands, persists to NVS and
- * reports state as JSON.
- *
- * Wire format follows Home Assistant's MQTT "json" light schema:
- *   set:   {"state":"ON"|"OFF"|"TOGGLE", "brightness":0-255,
- *           "color":{"r":..,"g":..,"b":..} (or [r,g,b]), "transition":seconds}
- *   state: {"state":"ON","brightness":128,"color_mode":"rgb","color":{"r":..,"g":..,"b":..}}
- * All set fields are optional.
+ * reports state as JSON. See BulbProtocol.hpp for the formats.
  */
 class BulbCtrl {
 public:
-    using StateListener = std::function<void(const std::string& state_json)>;
+    using StateListener = Callback<void(std::string_view state_json)>;
+
+    explicit BulbCtrl(LightEngine& engine) : engine_{engine} {}
+    BulbCtrl(const BulbCtrl&) = delete;
+    BulbCtrl& operator=(const BulbCtrl&) = delete;
 
     /** Load state from NVS (or defaults) and show it. */
-    void begin(LightEngine& engine, bool power_on_light, StateListener on_change);
+    [[nodiscard]] esp_err_t start(bool power_on_light, StateListener on_change);
 
     /** Apply a `set` command. Returns false if the payload is not valid JSON. */
-    bool apply_json(const char* data, int len);
+    bool apply_json(std::string_view json);
 
-    std::string state_json();
+    [[nodiscard]] StateJson state_json();
 
 private:
     static constexpr const char* TAG = "bulb_ctrl";
-    static constexpr const char* NVS_NS = "bulb";
-    static constexpr const char* NVS_KEY = "state";
-    static constexpr uint32_t DEFAULT_TRANSITION_MS = 400;
-    static constexpr uint32_t BOOT_FADE_MS = 1000;
-    static constexpr uint64_t SAVE_DELAY_US = 2 * 1000 * 1000;
+    static constexpr std::chrono::milliseconds BOOT_FADE{1000};
+    static constexpr std::chrono::microseconds SAVE_DELAY = std::chrono::seconds{2};
 
-    LightEngine* engine_ = nullptr;
+    LightEngine& engine_;
     StateListener on_change_;
-    SemaphoreHandle_t mtx_ = nullptr;
+    rtos::Mutex mtx_;  // guards state_
     LightState state_{};
     esp_timer_handle_t save_timer_ = nullptr;
 
     void load();
     void save();
-    static void save_cb(void* self);
-    std::string state_json_locked() const;
 };
