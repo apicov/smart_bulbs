@@ -5,10 +5,12 @@ import BrightnessHighIcon from '@mui/icons-material/BrightnessHigh';
 import PaletteIcon from '@mui/icons-material/PaletteOutlined';
 import { RgbColorPicker } from 'react-colorful';
 import { useParams } from 'react-router-dom';
+import { AlarmCard } from '@/components/AlarmCard';
 import { AppShell } from '@/components/AppShell';
 import { BulbGlow } from '@/components/BulbGlow';
 import { ConnectionBanner } from '@/components/ConnectionBanner';
 import { PaletteGrid } from '@/components/PaletteGrid';
+import { SleepTimerCard } from '@/components/SleepTimerCard';
 import { useBulbs } from '@/contexts/BulbsContext';
 import { useThrottled } from '@/hooks/useThrottled';
 import { displayName, type BulbCommand, type Rgb } from '@/core/bulb';
@@ -23,7 +25,7 @@ const pct = (b: number) => Math.round((b / 255) * 100);
 
 export default function BulbDetailPage() {
   const { id = '' } = useParams();
-  const { bulbs, status, send } = useBulbs();
+  const { bulbs, status, send, sendSchedule } = useBulbs();
   const bulb = bulbs[id];
   const s = bulb?.state ?? null;
   const usable = !!bulb?.online && status.kind === 'connected' && !!s;
@@ -121,6 +123,24 @@ export default function BulbDetailPage() {
           </Collapse>
         </CardContent>
       </Card>
+
+      {bulb?.schedule && (
+        <>
+          <SleepTimerCard
+            timer={bulb.schedule.timer}
+            lightOn={!!s?.on}
+            disabled={!usable}
+            onStart={(after, fade) => sendSchedule(id, { timer: { after, fade } })}
+            onCancel={() => sendSchedule(id, { timer: null })}
+          />
+          <AlarmCard
+            alarm={bulb.schedule.alarm}
+            timeSynced={bulb.schedule.timeSynced}
+            disabled={!usable}
+            onSave={(alarm) => sendSchedule(id, { alarm })}
+          />
+        </>
+      )}
     </AppShell>
   );
 }

@@ -6,6 +6,7 @@
 #include <optional>
 #include <string_view>
 #include <type_traits>
+#include "BulbSchedule.hpp"
 #include "LightModel.hpp"
 
 // The bulb's data formats, free of ESP-IDF so they can be unit tested on the host.
@@ -15,6 +16,15 @@
 //           "color":{"r":..,"g":..,"b":..} (or [r,g,b]), "transition":seconds}
 //   state: {"state":"ON","brightness":128,"color_mode":"rgb","color":{"r":..,"g":..,"b":..}}
 // All set fields are optional.
+//
+// Sleep timer and alarm, on their own topics:
+//   schedule_set: {"timer":{"after":seconds,"fade":seconds}} or {"timer":null},
+//                 {"alarm":{"enabled":true,"hour":7,"minute":0,"days":[1,2,3,4,5],"rise":seconds,
+//                           "brightness":1-255,"color":{"r":..,"g":..,"b":..}}}
+//                 All fields but the timer's "after" are optional. Days are 0 (Sunday) to 6, and
+//                 an empty list means once.
+//   schedule:     {"time_synced":true,"timer":{"ends":unix_time,"fade":seconds},"alarm":{...}}
+//                 "timer" is null when none is running, and "ends" is 0 until the clock is set.
 
 struct Command {
     LightState state;
@@ -37,6 +47,38 @@ private:
 
 [[nodiscard]] StateJson format_state(const LightState& s);
 
+struct ScheduleCommand {
+    enum class TimerAction : uint8_t { None, Start, Cancel };
+    TimerAction timer_action = TimerAction::None;
+    SleepTimer timer{};
+    std::optional<Alarm> alarm;  ///< Set if the message changes the alarm.
+};
+
+/** Parse a `schedule_set` payload, applying its alarm fields to `current`. Empty if not a JSON object. */
+[[nodiscard]] std::optional<ScheduleCommand> parse_schedule_command(std::string_view json,
+                                                                    const Alarm& current);
+
+/** A running sleep timer, as reported on `schedule`. */
+struct TimerStatus {
+    int64_t ends;  ///< Unix time at which the light is fully off, 0 if the clock isn't set.
+    uint32_t fade_s;
+};
+
+/** A formatted schedule message, big enough for the longest possible one. */
+class ScheduleJson {
+public:
+    [[nodiscard]] std::string_view view() const { return {buf_.data(), len_}; }
+
+private:
+    friend ScheduleJson format_schedule(bool time_synced, const std::optional<TimerStatus>& timer,
+                                        const Alarm& alarm);
+    std::array<char, 256> buf_{};
+    std::size_t len_ = 0;
+};
+
+[[nodiscard]] ScheduleJson format_schedule(bool time_synced, const std::optional<TimerStatus>& timer,
+                                           const Alarm& alarm);
+
 /**
  * Versioned NVS record, so the struct can grow later without misreading old
  * data. Bulbs in the field hold this exact layout: changing it needs a new
@@ -49,3 +91,12 @@ struct StoredState {
 };
 static_assert(sizeof(StoredState) == 6);
 static_assert(std::is_trivially_copyable_v<StoredState>);
+
+/** Versioned NVS record for the alarm, kept apart from StoredState. */
+struct StoredAlarm {
+    static constexpr uint8_t VERSION = 1;
+    uint8_t version = VERSION;
+    Alarm alarm;
+};
+static_assert(sizeof(StoredAlarm) == 12);
+static_assert(std::is_trivially_copyable_v<StoredAlarm>);

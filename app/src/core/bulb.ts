@@ -2,7 +2,7 @@
  * The bulb protocol, as pure functions (no React, no MQTT client): topics, payloads, and how incoming
  * messages update the app's map of bulbs. Must match firmware/components/bulb_ctrl and broker/README.md.
  *
- * Topics: <prefix>/<id>/status | state | set | motion
+ * Topics: <prefix>/<id>/status | state | set | motion | schedule | schedule_set
  * Payloads follow Home Assistant's MQTT JSON light schema.
  */
 
@@ -17,11 +17,42 @@ export interface BulbState {
   color: Rgb;
 }
 
+/** A running sleep timer: the light is fully off at `ends` (Unix seconds, 0 until the bulb's clock is set). */
+export interface SleepTimer {
+  ends: number;
+  fade: number; // seconds
+}
+
+/** A wake-up alarm: reaches brightness at hour:minute, starting `rise` seconds earlier. */
+export interface Alarm {
+  enabled: boolean;
+  hour: number;
+  minute: number;
+  days: number[]; // 0 = Sunday … 6 = Saturday. Empty = once.
+  rise: number; // seconds
+  brightness: number; // 1–255
+  color: Rgb;
+}
+
+/** What a bulb reports on `schedule` (retained). */
+export interface Schedule {
+  timeSynced: boolean;
+  timer: SleepTimer | null;
+  alarm: Alarm;
+}
+
+/** A `schedule_set` command. `timer: null` cancels. A fade of 0 turns off suddenly. */
+export interface ScheduleCommand {
+  timer?: { after: number; fade: number } | null;
+  alarm?: Partial<Alarm>;
+}
+
 export interface Bulb {
   id: string;
   online: boolean;
   state: BulbState | null; // null until its first `state` message
   motion: boolean;
+  schedule: Schedule | null; // null until its first `schedule` message
 }
 
 /** A `set` command: every field optional. `transition` is in seconds. */
@@ -35,9 +66,15 @@ export interface BulbCommand {
 export type Bulbs = Record<string, Bulb>;
 
 export const topics = {
-  /** what the app subscribes to: every bulb's retained status/state/motion */
-  subscribe: [`${TOPIC_PREFIX}/+/status`, `${TOPIC_PREFIX}/+/state`, `${TOPIC_PREFIX}/+/motion`],
+  /** what the app subscribes to: every bulb's retained status/state/motion/schedule */
+  subscribe: [
+    `${TOPIC_PREFIX}/+/status`,
+    `${TOPIC_PREFIX}/+/state`,
+    `${TOPIC_PREFIX}/+/motion`,
+    `${TOPIC_PREFIX}/+/schedule`,
+  ],
   set: (id: string) => `${TOPIC_PREFIX}/${id}/set`,
+  scheduleSet: (id: string) => `${TOPIC_PREFIX}/${id}/schedule_set`,
 };
 
 const clamp255 = (n: unknown) => Math.max(0, Math.min(255, Math.round(Number(n) || 0)));
@@ -77,11 +114,40 @@ export function encodeCommand(cmd: BulbCommand): string {
   return JSON.stringify(out);
 }
 
+/** The firmware's `schedule` JSON → Schedule (null if it isn't one). */
+export function parseSchedule(payload: string): Schedule | null {
+  try {
+    const j = JSON.parse(payload) as {
+      time_synced?: unknown;
+      timer?: { ends?: unknown; fade?: unknown } | null;
+      alarm?: Partial<Alarm>;
+    };
+    if (typeof j !== 'object' || j === null || typeof j.alarm !== 'object' || j.alarm === null) return null;
+    const a = j.alarm;
+    const c = a.color ?? ({} as Partial<Rgb>);
+    return {
+      timeSynced: j.time_synced === true,
+      timer: j.timer ? { ends: Number(j.timer.ends) || 0, fade: Number(j.timer.fade) || 0 } : null,
+      alarm: {
+        enabled: a.enabled === true,
+        hour: Number(a.hour) || 0,
+        minute: Number(a.minute) || 0,
+        days: Array.isArray(a.days) ? a.days.map(Number) : [],
+        rise: Number(a.rise) || 0,
+        brightness: Math.max(1, clamp255(a.brightness ?? 255)),
+        color: { r: clamp255(c.r), g: clamp255(c.g), b: clamp255(c.b) },
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Apply one incoming message to the map of bulbs. Returns the same object if nothing changed. */
 export function applyMessage(bulbs: Bulbs, topic: string, payload: string): Bulbs {
   const t = parseTopic(topic);
   if (!t) return bulbs;
-  const prev: Bulb = bulbs[t.id] ?? { id: t.id, online: false, state: null, motion: false };
+  const prev: Bulb = bulbs[t.id] ?? { id: t.id, online: false, state: null, motion: false, schedule: null };
 
   // An empty retained message clears the topic: the bulb was removed from the broker
   if (payload === '' && t.leaf === 'status') {
@@ -104,6 +170,11 @@ export function applyMessage(bulbs: Bulbs, topic: string, payload: string): Bulb
       try { next = { ...prev, motion: Boolean((JSON.parse(payload) as { motion?: unknown }).motion) }; }
       catch { /* ignore malformed */ }
       break;
+    case 'schedule': {
+      const s = parseSchedule(payload);
+      if (s) next = { ...prev, schedule: s };
+      break;
+    }
     default:
       return bulbs;
   }

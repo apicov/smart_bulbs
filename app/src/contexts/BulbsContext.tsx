@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import mqtt, { type MqttClient } from 'mqtt';
-import { applyCommand, applyMessage, encodeCommand, topics, type BulbCommand, type Bulbs } from '@/core/bulb';
+import { applyCommand, applyMessage, encodeCommand, topics, type BulbCommand, type Bulbs, type ScheduleCommand } from '@/core/bulb';
 import { useSettings } from '@/contexts/SettingsContext';
 
 export type ConnectionStatus =
@@ -15,6 +15,8 @@ interface BulbsState {
   status: ConnectionStatus;
   /** Send a command. qos 0 for the stream of values while dragging, 1 (default) for anything final. */
   send: (id: string, cmd: BulbCommand, qos?: 0 | 1) => void;
+  /** Change a bulb's sleep timer or alarm. */
+  sendSchedule: (id: string, cmd: ScheduleCommand) => void;
 }
 
 const BulbsContext = createContext<BulbsState | null>(null);
@@ -82,7 +84,21 @@ export function BulbsProvider({ children }: { children: ReactNode }) {
     setBulbs((b) => (b[id] ? { ...b, [id]: { ...b[id], state: applyCommand(b[id].state, cmd) } } : b));
   }, []);
 
-  const value = useMemo(() => ({ bulbs, status, send }), [bulbs, status, send]);
+  const sendSchedule = useCallback((id: string, cmd: ScheduleCommand) => {
+    const c = client.current;
+    if (!c?.connected) return;
+    c.publish(topics.scheduleSet(id), JSON.stringify(cmd), { qos: 1 });
+    // show the alarm now; the bulb's retained `schedule` reply confirms or corrects it
+    const alarm = cmd.alarm;
+    if (alarm) {
+      setBulbs((b) => {
+        const schedule = b[id]?.schedule;
+        return schedule ? { ...b, [id]: { ...b[id], schedule: { ...schedule, alarm: { ...schedule.alarm, ...alarm } } } } : b;
+      });
+    }
+  }, []);
+
+  const value = useMemo(() => ({ bulbs, status, send, sendSchedule }), [bulbs, status, send, sendSchedule]);
   return <BulbsContext.Provider value={value}>{children}</BulbsContext.Provider>;
 }
 

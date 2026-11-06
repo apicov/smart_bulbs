@@ -6,6 +6,8 @@ The control app lives in `app/`: React 19, MUI 7 and Capacitor 7, built on the s
 
 - **Bulb list:** every bulb that has connected to the broker shows up by itself. Each one has an online/offline state, its current colour and brightness, a power switch and a motion indicator. There's also an **All off** button.
 - **Bulb page:** power switch, brightness slider, 12 one-tap colours (four whites and eight colours), and a custom colour picker.
+- **Sleep timer** (on the bulb page): turns the light off after a set time, suddenly or with a fade you choose. The light is fully off when the timer ends. Turning the light off yourself cancels it, and a restart of the bulb forgets it.
+- **Wake-up alarm** (on the bulb page): brightens gradually so it reaches full brightness at the alarm time, on the days you pick or just once. The bulb stores and runs it, so your phone can be off. Changing the light during a rise takes over from it.
 - **Settings:** broker URL, username and password, plus a light/dark/system theme.
 
 ## First run

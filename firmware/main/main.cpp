@@ -3,10 +3,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <string_view>
 
 #include <esp_log.h>
 #include <esp_mac.h>
+#include <esp_netif_sntp.h>
 #include <nvs_flash.h>
 
 #include <BulbCtrl.hpp>
@@ -33,7 +36,9 @@ static_assert(CONFIG_BULB_MAX_MILLIAMPS >= 0, "current limit can't be negative")
 // sizeof includes each string's NUL, which leaves room for the separators too,
 // so topics built from these can't be truncated.
 constexpr std::size_t ID_CAPACITY = std::max(sizeof(CONFIG_BULB_ID), sizeof("bulb-xxxxxx"));
-constexpr std::size_t TOPIC_CAPACITY = sizeof(CONFIG_BULB_TOPIC_PREFIX) + ID_CAPACITY + sizeof("status");
+// "schedule_set" is the longest leaf.
+constexpr std::size_t TOPIC_CAPACITY =
+    sizeof(CONFIG_BULB_TOPIC_PREFIX) + ID_CAPACITY + sizeof("schedule_set");
 
 using BulbId = std::array<char, ID_CAPACITY>;
 using Topic = std::array<char, TOPIC_CAPACITY>;
@@ -56,6 +61,8 @@ Topic make_topic(const BulbId& id, const char* leaf) {
     return topic;
 }
 
+constexpr const char* NTP_SERVER = "pool.ntp.org";
+
 constexpr std::string_view motion_json(bool motion) {
     return motion ? R"({"motion":true})" : R"({"motion":false})";
 }
@@ -66,11 +73,17 @@ public:
     void run() {
         ESP_LOGI(TAG, "Bulb id: %s (topics %s/%s/*)", id_.data(), CONFIG_BULB_TOPIC_PREFIX, id_.data());
 
+        // Local time, once SNTP has set the clock. Daylight saving follows from the rule.
+        setenv("TZ", CONFIG_BULB_TIMEZONE, 1);  // NOLINT(concurrency-mt-unsafe): no other task uses it yet
+        tzset();
+
         // Light first, so the bulb works as a plain lamp even without WiFi.
         ESP_ERROR_CHECK(engine_.start({.gpio = CONFIG_BULB_LED_GPIO,
                                        .led_count = CONFIG_BULB_LED_COUNT,
                                        .max_milliamps = CONFIG_BULB_MAX_MILLIAMPS}));
-        ESP_ERROR_CHECK(ctrl_.start(POWER_ON_LIGHT, [this](std::string_view json) { publish_state(json); }));
+        ESP_ERROR_CHECK(ctrl_.start(
+            POWER_ON_LIGHT, [this](std::string_view json) { publish_state(json); },
+            [this](std::string_view json) { publish_schedule(json); }));
 
         // Past this point a failure costs a feature, not the lamp: log it and carry on.
         if constexpr (CONFIG_BULB_PIR_GPIO >= 0) {
@@ -85,6 +98,8 @@ public:
 
 private:
     void on_wifi_connected() {
+        start_time_sync();
+
         if (mqtt_.started()) {  // WiFi came back: kick the existing client
             const esp_err_t err = mqtt_.reconnect();
             // Not a problem: esp-mqtt also retries by itself and may be doing so already.
@@ -103,21 +118,39 @@ private:
             [this](std::string_view topic, std::string_view payload) { on_mqtt_message(topic, payload); }));
     }
 
+    void start_time_sync() {
+        if (time_sync_started_) return;
+        esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG(NTP_SERVER);
+        cfg.wait_for_sync = false;  // BulbCtrl notices when the clock becomes valid
+        const esp_err_t err = esp_netif_sntp_init(&cfg);
+        ESP_ERROR_CHECK_WITHOUT_ABORT(err);
+        time_sync_started_ = err == ESP_OK;
+    }
+
     void on_mqtt_connected() {
         mqtt_.publish(t_status_.data(), "online", Qos::AtLeastOnce, true);
         publish_state(ctrl_.state_json().view());
         publish_motion(pir_.motion());
+        publish_schedule(ctrl_.schedule_json().view());
         ESP_ERROR_CHECK_WITHOUT_ABORT(mqtt_.subscribe(t_set_.data(), Qos::AtLeastOnce));
-        ESP_LOGI(TAG, "Lowest free stack: light %zu B, pir %zu B", engine_.stack_free_bytes(),
-                 pir_.stack_free_bytes());
+        ESP_ERROR_CHECK_WITHOUT_ABORT(mqtt_.subscribe(t_schedule_set_.data(), Qos::AtLeastOnce));
+        ESP_LOGI(TAG, "Lowest free stack: light %zu B, pir %zu B, schedule %zu B", engine_.stack_free_bytes(),
+                 pir_.stack_free_bytes(), ctrl_.stack_free_bytes());
     }
 
     void on_mqtt_message(std::string_view topic, std::string_view payload) {
-        if (topic == t_set_.data()) ctrl_.apply_json(payload);
+        if (topic == t_set_.data())
+            ctrl_.apply_json(payload);
+        else if (topic == t_schedule_set_.data())
+            ctrl_.apply_schedule_json(payload);
     }
 
     void publish_state(std::string_view json) {
         mqtt_.publish(t_state_.data(), json, Qos::AtLeastOnce, true);
+    }
+
+    void publish_schedule(std::string_view json) {
+        mqtt_.publish(t_schedule_.data(), json, Qos::AtLeastOnce, true);
     }
 
     void publish_motion(bool motion) {
@@ -129,12 +162,15 @@ private:
     const Topic t_state_ = make_topic(id_, "state");
     const Topic t_set_ = make_topic(id_, "set");
     const Topic t_motion_ = make_topic(id_, "motion");
+    const Topic t_schedule_ = make_topic(id_, "schedule");
+    const Topic t_schedule_set_ = make_topic(id_, "schedule_set");
 
     LightEngine engine_;
     BulbCtrl ctrl_{engine_};
     Pir pir_;
     WiFiStation wifi_;
     MQTTClient mqtt_;
+    bool time_sync_started_ = false;
 };
 
 void init_nvs() {

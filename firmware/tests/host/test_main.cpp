@@ -177,6 +177,145 @@ void test_stored_layout() {
     CHECK(std::memcmp(&rec, expected.data(), expected.size()) == 0);
 }
 
+void test_alarm_window() {
+    Alarm alarm{
+        .enabled = true, .hour = 7, .minute = 0, .days = 0b0111110, .rise_s = 1800};  // Monday to Friday
+    const auto at = [](int day, int hour, int minute, int second = 0) {
+        return second_of_week(day, hour, minute, second);
+    };
+    CHECK(!alarm_rise_remaining(alarm, at(1, 6, 29, 59)));
+    CHECK(alarm_rise_remaining(alarm, at(1, 6, 30)) == 1800U);
+    CHECK(alarm_rise_remaining(alarm, at(1, 6, 59, 59)) == 1U);
+    CHECK(!alarm_rise_remaining(alarm, at(1, 7, 0)));   // reached its alarm time
+    CHECK(!alarm_rise_remaining(alarm, at(0, 6, 45)));  // Sunday isn't selected
+    CHECK(alarm_rise_remaining(alarm, at(5, 6, 45)) == 900U);
+    CHECK(!alarm_rise_remaining(alarm, at(6, 6, 45)));
+
+    // Once: any day, and only while enabled.
+    alarm.days = 0;
+    CHECK(alarm_rise_remaining(alarm, at(0, 6, 45)) == 900U);
+    alarm.enabled = false;
+    CHECK(!alarm_rise_remaining(alarm, at(0, 6, 45)));
+
+    // A rise for 00:10 Monday starts on Sunday evening.
+    const Alarm midnight{.enabled = true, .hour = 0, .minute = 10, .days = 0b0000010, .rise_s = 1800};
+    CHECK(alarm_rise_remaining(midnight, at(0, 23, 50)) == 1200U);
+    CHECK(alarm_rise_remaining(midnight, at(1, 0, 0)) == 600U);
+
+    // A rise for 00:10 Sunday starts on Saturday evening, across the end of the week.
+    const Alarm week{.enabled = true, .hour = 0, .minute = 10, .days = 0b0000001, .rise_s = 1800};
+    CHECK(alarm_rise_remaining(week, at(6, 23, 50)) == 1200U);
+    CHECK(alarm_rise_remaining(week, at(0, 0, 5)) == 300U);
+    CHECK(!alarm_rise_remaining(week, at(5, 23, 50)));
+}
+
+ScheduleCommand parse_schedule_ok(std::string_view json, const Alarm& current = {}) {
+    const auto cmd = parse_schedule_command(json, current);
+    CHECK(cmd.has_value());
+    return cmd.value_or(ScheduleCommand{});
+}
+
+void test_parse_timer() {
+    using enum ScheduleCommand::TimerAction;
+    CHECK(parse_schedule_ok("{}").timer_action == None);
+    CHECK(parse_schedule_ok(R"({"timer":null})").timer_action == Cancel);
+    CHECK(parse_schedule_ok(R"({"timer":{"after":0}})").timer_action == Cancel);
+    CHECK(parse_schedule_ok(R"({"timer":{"fade":5}})").timer_action == None);  // no duration
+
+    const auto sudden = parse_schedule_ok(R"({"timer":{"after":1800}})");
+    CHECK(sudden.timer_action == Start);
+    CHECK(sudden.timer.after_s == 1800);
+    CHECK(sudden.timer.fade_s == 0);
+
+    const auto fade = parse_schedule_ok(R"({"timer":{"after":1800,"fade":60}})");
+    CHECK(fade.timer.after_s == 1800);
+    CHECK(fade.timer.fade_s == 60);
+
+    // A fade can't outlast the timer, or an hour.
+    CHECK(parse_schedule_ok(R"({"timer":{"after":30,"fade":60}})").timer.fade_s == 30);
+    CHECK(parse_schedule_ok(R"({"timer":{"after":86400,"fade":7200}})").timer.fade_s == 3600);
+    CHECK(parse_schedule_ok(R"({"timer":{"after":999999}})").timer.after_s == 86400);
+    CHECK(parse_schedule_ok(R"({"timer":{"after":60,"fade":-5}})").timer.fade_s == 0);
+}
+
+void test_parse_alarm() {
+    CHECK(!parse_schedule_ok("{}").alarm);
+    CHECK(!parse_schedule_ok(R"({"alarm":null})").alarm);
+
+    const auto full = parse_schedule_ok(
+        R"({"alarm":{"enabled":true,"hour":6,"minute":45,"days":[1,5],"rise":600,"brightness":200,"color":{"r":1,"g":2,"b":3}}})");
+    const Alarm want{.enabled = true,
+                     .hour = 6,
+                     .minute = 45,
+                     .days = 0b0100010,
+                     .rise_s = 600,
+                     .brightness = 200,
+                     .color = {1, 2, 3}};
+    CHECK(full.alarm == want);
+
+    // Only the fields sent change.
+    const auto partial = parse_schedule_ok(R"({"alarm":{"enabled":false}})", want);
+    Alarm disabled = want;
+    disabled.enabled = false;
+    CHECK(partial.alarm == disabled);
+
+    // An empty list means once, and bad days are ignored.
+    CHECK(parse_schedule_ok(R"({"alarm":{"days":[]}})", want).alarm->days == 0);
+    CHECK(parse_schedule_ok(R"({"alarm":{"days":[0,7,-1,"x",6]}})").alarm->days == 0b1000001);
+
+    // Out of range values are clamped.
+    const auto clamped = parse_schedule_ok(R"({"alarm":{"hour":99,"minute":-3,"rise":1,"brightness":0}})");
+    CHECK(clamped.alarm->hour == 23);
+    CHECK(clamped.alarm->minute == 0);
+    CHECK(clamped.alarm->rise_s == 5);
+    CHECK(clamped.alarm->brightness == 1);
+    CHECK(parse_schedule_ok(R"({"alarm":{"rise":99999}})").alarm->rise_s == 3600);
+
+    CHECK(!parse_schedule_command("nonsense", Alarm{}));
+    CHECK(!parse_schedule_command("[]", Alarm{}));
+}
+
+void test_format_schedule() {
+    const Alarm off{};
+    CHECK(
+        format_schedule(false, std::nullopt, off).view() ==
+        R"({"time_synced":false,"timer":null,"alarm":{"enabled":false,"hour":7,"minute":0,"days":[],"rise":1800,"brightness":255,"color":{"r":255,"g":180,"b":100}}})");
+
+    const Alarm weekdays{.enabled = true, .hour = 6, .minute = 30, .days = 0b0111110, .rise_s = 600};
+    CHECK(
+        format_schedule(true, TimerStatus{.ends = 1800000000, .fade_s = 60}, weekdays).view() ==
+        R"({"time_synced":true,"timer":{"ends":1800000000,"fade":60},"alarm":{"enabled":true,"hour":6,"minute":30,"days":[1,2,3,4,5],"rise":600,"brightness":255,"color":{"r":255,"g":180,"b":100}}})");
+
+    // The longest possible message has to fit, or it would be cut off.
+    const Alarm longest{.enabled = false,
+                        .hour = 23,
+                        .minute = 59,
+                        .days = 0b1111111,
+                        .rise_s = 3600,
+                        .brightness = 255,
+                        .color = {255, 255, 255}};
+    const ScheduleJson json = format_schedule(false, TimerStatus{.ends = INT64_MAX, .fade_s = 3600}, longest);
+    CHECK(json.view().size() < 256);
+    CHECK(json.view().back() == '}');
+    CHECK(json.view().data()[json.view().size()] == '\0');
+}
+
+void test_stored_alarm_layout() {
+    // Bulbs will hold these bytes in NVS, so this mustn't change without a new version.
+    const StoredAlarm rec{.alarm = {.enabled = true,
+                                    .hour = 7,
+                                    .minute = 30,
+                                    .days = 0b0111110,
+                                    .rise_s = 0x0102,
+                                    .brightness = 200,
+                                    .color = {10, 20, 30}}};
+    const auto* bytes = reinterpret_cast<const uint8_t*>(&rec);
+    constexpr std::array<std::size_t, 10> offsets{0, 2, 3, 4, 5, 6, 8, 9, 10, 11};
+    constexpr std::array<uint8_t, 10> values{1, 1, 7, 30, 0b0111110, 0x02, 200, 10, 20, 30};
+    for (std::size_t i = 0; i < offsets.size(); ++i) CHECK(bytes[offsets[i]] == values[i]);
+    CHECK(bytes[7] == 0x01);
+}
+
 void test_callback() {
     Callback<int(int)> empty;
     CHECK(!empty);
@@ -208,6 +347,11 @@ int main() {
     test_parse_invalid();
     test_format_state();
     test_stored_layout();
+    test_alarm_window();
+    test_parse_timer();
+    test_parse_alarm();
+    test_format_schedule();
+    test_stored_alarm_layout();
     test_callback();
 
     if (failures > 0) {

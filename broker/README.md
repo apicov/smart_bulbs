@@ -116,3 +116,5 @@ The full tree is `pico/bulb/<id>/…`. Payloads follow Home Assistant's MQTT **J
 | `state`  | bulb → all | yes      | `{"state":"ON","brightness":128,"color_mode":"rgb","color":{"r":255,"g":180,"b":100}}` |
 | `set`    | app → bulb | no       | Any subset of: `"state":"ON"\|"OFF"\|"TOGGLE"`, `"brightness":0-255`, `"color":{"r","g","b"}` or `[r,g,b]`, `"transition":seconds` (default 0.4) |
 | `motion` | bulb → all | yes      | `{"motion":true}` / `{"motion":false}` |
+| `schedule_set` | app → bulb | no | Sleep timer and/or alarm: `{"timer":{"after":1800,"fade":60}}` (seconds; a fade of 0 is sudden), `{"timer":null}` to cancel, `{"alarm":{"enabled":true,"hour":7,"minute":0,"days":[1,2,3,4,5],"rise":1800,"brightness":255,"color":{"r":255,"g":180,"b":100}}}`. Alarm fields are optional. Days run from 0 (Sunday) to 6, and an empty list means once |
+| `schedule` | bulb → all | yes | `{"time_synced":true,"timer":{"ends":1800000000,"fade":60},"alarm":{…}}`. `timer` is `null` when none is running, and `ends` is Unix time, or 0 until the bulb's clock is set |

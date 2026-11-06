@@ -47,9 +47,25 @@ describe('applyMessage', () => {
     b = applyMessage(b, 'pico/bulb/lamp/status', 'online');
     b = applyMessage(b, 'pico/bulb/lamp/motion', '{"motion":true}');
     expect(b.lamp).toEqual({
-      id: 'lamp', online: true, motion: true,
+      id: 'lamp', online: true, motion: true, schedule: null,
       state: { on: true, brightness: 128, color: { r: 255, g: 180, b: 100 } },
     });
+  });
+  it('stores the schedule the firmware reports', () => {
+    const payload = '{"time_synced":true,"timer":{"ends":1800000000,"fade":60},"alarm":{"enabled":true,"hour":6,"minute":30,"days":[1,2,3,4,5],"rise":600,"brightness":255,"color":{"r":255,"g":180,"b":100}}}';
+    expect(applyMessage({}, 'pico/bulb/lamp/schedule', payload).lamp.schedule).toEqual({
+      timeSynced: true,
+      timer: { ends: 1800000000, fade: 60 },
+      alarm: { enabled: true, hour: 6, minute: 30, days: [1, 2, 3, 4, 5], rise: 600, brightness: 255, color: { r: 255, g: 180, b: 100 } },
+    });
+  });
+  it('reports no timer when the firmware sends null, and ignores bad schedules', () => {
+    const payload = '{"time_synced":false,"timer":null,"alarm":{"enabled":false,"hour":7,"minute":0,"days":[],"rise":1800,"brightness":255,"color":{"r":255,"g":180,"b":100}}}';
+    const b = applyMessage({}, 'pico/bulb/lamp/schedule', payload);
+    expect(b.lamp.schedule?.timer).toBeNull();
+    expect(b.lamp.schedule?.timeSynced).toBe(false);
+    expect(applyMessage(b, 'pico/bulb/lamp/schedule', 'garbage')).toBe(b);
+    expect(applyMessage(b, 'pico/bulb/lamp/schedule', '{}')).toBe(b);
   });
   it('marks a bulb offline from its Last Will', () => {
     const b = applyMessage({}, 'pico/bulb/lamp/status', 'online');

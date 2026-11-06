@@ -27,5 +27,5 @@ flowchart LR
 ```
 
 - **Bulbs work on their own.** Fades, saved state and (later) effects, schedules and night-off all run on the bulb itself. The app only sends commands such as "red, 60%" and shows each bulb's state.
-- **MQTT topics:** `pico/bulb/<id>/status | state | set | motion`. Payloads use Home Assistant's JSON light schema; see [the topic reference](../broker/README.md#topic-and-payload-reference).
+- **MQTT topics:** `pico/bulb/<id>/status | state | set | motion | schedule | schedule_set`. Payloads use Home Assistant's JSON light schema; see [the topic reference](../broker/README.md#topic-and-payload-reference).
 - **Without internet** the bulbs still light up and keep their last setting, but the app can't reach them. That's because the broker lives on the Linode.

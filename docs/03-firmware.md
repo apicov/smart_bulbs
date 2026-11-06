@@ -44,11 +44,18 @@ main: Bulb id: living-room (topics pico/bulb/living-room/*)
 light_engine: Started: 24 LEDs on GPIO18, limit 450 mA     ← strip fades up to warm white
 wifi_station: Got IP 192.168.x.x
 mqtt_client: Connected to broker
-main: Lowest free stack: light 2800 B, pir 1500 B          ← your numbers will differ
+main: Lowest free stack: light 2800 B, pir 1500 B, schedule 2000 B   ← your numbers will differ
+bulb_ctrl: Clock set: Fri 2026-11-06 21:30:00 CET          ← should match your clock
 pir: motion detected                                       ← wave at the sensor
 ```
 
-The stack line repeats on every MQTT connect, and its numbers can only fall. If either drops below about 500 B, increase that task's `TASK_STACK_BYTES`. If it stays large after days of use, you can reduce it to save RAM.
+The stack line repeats on every MQTT connect, and its numbers can only fall. If any of them drops below about 500 B, increase that task's `TASK_STACK_BYTES`. If it stays large after days of use, you can reduce it to save RAM.
+
+## Clock and timezone
+
+The wake-up alarm needs the time, so the bulb gets it from `pool.ntp.org` after connecting to WiFi. `Clock set` can appear before or after the stack line. The default timezone is Central European Time, with daylight saving handled automatically. For anywhere else, set `CONFIG_BULB_TIMEZONE` to a POSIX TZ string, such as `GMT0BST,M3.5.0/1,M10.5.0` for the UK.
+
+After a power cut with no internet, the bulb has no clock and the alarm can't run. The app shows a warning until the bulb gets the time. The sleep timer doesn't need the clock.
 
 ## Test without the app
 
@@ -67,6 +74,9 @@ mosquitto_pub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/set \
   -m '{"state":"ON","color":{"r":255,"g":0,"b":0},"brightness":100,"transition":1}'
 
 mosquitto_pub … -m '{"state":"OFF","transition":3}'     # slow fade out
+
+# on topic pico/bulb/living-room/schedule_set
+mosquitto_pub … -m '{"timer":{"after":60,"fade":10}}'   # off in 60 s, fading for the last 10 s
 ```
 
 ## Test without a board
