@@ -1,5 +1,7 @@
 # 3. Firmware: configure, flash, test
 
+Setting up a new bulb needs USB, and the sections below go in order. Once a bulb is running, go to [Update over WiFi](#update-over-wifi) to install new code and [Debug a bulb remotely](#debug-a-bulb-remotely) to look into a problem.
+
 ## One-time: ESP-IDF 6.0
 
 The firmware needs ESP-IDF v6.0 with the RISC-V toolchain. Install it with Espressif's installer (`eim`). In every new shell, activate it first:
@@ -66,7 +68,7 @@ main: Bulb id: living-room (topics pico/bulb/living-room/*)
 light_engine: Started: 24 LEDs on GPIO18, limit 450 mA     ← strip fades up to warm white
 wifi_station: Got IP 192.168.x.x
 mqtt_client: Connected to broker
-main: Lowest free stack: light 2800 B, pir 1500 B, schedule 2000 B, ota 7500 B   ← your numbers will differ
+main: Lowest free stack: light 2800 B, pir 1500 B, schedule 2000 B, ota 7500 B, debug 4000 B   ← your numbers will differ
 bulb_ctrl: Clock set: Fri 2026-11-06 21:30:00 CET          ← should match your clock
 pir: motion detected                                       ← wave at the sensor
 ```
@@ -115,7 +117,7 @@ python tools/publish_firmware.py     # --server <login> if you don't use tsp@mqt
 
 This changes nothing on any bulb. It keeps the `.bin` and `.elf` in `releases/<version>/`, which git ignores.
 
-**2. Watch and update one bulb.** Check it before updating the rest.
+**2. Watch and update one bulb.** Check it before updating the rest. `H`, `CA` and `P` are set as in [Test without the app](#test-without-the-app).
 
 ```sh
 mosquitto_sub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/info -v
@@ -130,7 +132,7 @@ Opening the USB port restarts this board, and that counts as a power-up, so the 
 
 | `ota` in `info` | What it means |
 |-----------------|---------------|
-| `up_to_date` | The server has the version already running |
+| `up_to_date` | The server has the version already running, so nothing happens, even with `"force":true`. To try an update on a bulb that's already current, make a new commit, then build and publish it |
 | `busy` | A sleep timer or alarm is running, as a restart would lose it. Send the command again later |
 | `waiting` | Installed, and restarts when a timer or alarm that started during the download has finished |
 | `rolled_back` | This version failed on this bulb. Publish a fixed one, or add `"force":true` if the cause was something else, such as a broker outage |
@@ -224,4 +226,4 @@ python tools/lint.py
 | `Connection refused (check username/password/ACL)` | The bulb's `--id` doesn't match the MQTT user, or the password is wrong |
 | TLS/handshake errors | URI must be `mqtts://…:8883`; check the board can reach the internet |
 | `ota` stays `failed`, log shows `Can't get https://…` | Nothing published yet, or the server's firmware vhost isn't set up. See [the broker guide](02-broker.md) |
-| Board resets when you go to full white | Power brown-out: lower `MAX_MILLIAMPS` or use a separate supply |
+| Board resets when you go to full white | Power brown-out, which `info` shows as `"reset":"brownout"`: lower `--max-ma` with `tools/provision.py` or use a separate supply |

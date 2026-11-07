@@ -6,14 +6,14 @@ DIY smart bulbs: an **ESP32-C6-Zero** drives a NeoPixel strip and reads a PIR se
 
 | Folder      | What |
 |-------------|------|
-| `firmware/` | ESP-IDF 6.0 project for the bulb: light engine (fades, gamma, current limit), PIR sensor, MQTT over TLS, state saved in NVS |
-| `broker/`   | Mosquitto config, ACL and `setup-server.sh` for the Fedora server; `dev/` runs a local test broker |
+| `firmware/` | ESP-IDF 6.0 project for the bulb: light engine (fades, gamma, current limit), PIR sensor, MQTT over TLS, state saved in NVS, signed updates and debugging over WiFi |
+| `broker/`   | Mosquitto config, ACL and `setup-server.sh` for the Fedora server, which also hosts firmware updates; `dev/` runs a local test broker |
 | `app/`      | Capacitor + React + MUI control app (web and Android): bulb list, power, brightness, palette, colour picker |
 | `docs/`     | Step-by-step setup guide and wiring |
 
 ## MQTT topics
 
-`pico/bulb/<id>/status | state | set | motion`. Payloads use Home Assistant's JSON light schema; see [broker/README.md](broker/README.md#topic-and-payload-reference).
+`pico/bulb/<id>/status | state | set | motion | schedule | schedule_set | cmd | info | log | coredump`. Payloads use Home Assistant's JSON light schema; see [broker/README.md](broker/README.md#topic-and-payload-reference).
 
 ## Firmware quick start
 
@@ -27,6 +27,16 @@ idf.py monitor
 ```
 
 Create `firmware/keys/` first if it doesn't exist. See [docs/03-firmware.md](docs/03-firmware.md) for the details.
+
+To update a bulb after that, with no cable (commit your changes first):
+
+```sh
+idf.py reconfigure build
+python tools/publish_firmware.py
+mosquitto_pub … -t pico/bulb/living-room/cmd -m '{"cmd":"ota"}'
+```
+
+See [Update over WiFi](docs/03-firmware.md#update-over-wifi) for the full command and [Debug a bulb remotely](docs/03-firmware.md#debug-a-bulb-remotely) for logs and crash reports.
 
 Default wiring: LED data on GPIO18, PIR on GPIO19, 24 LEDs, 1000 mA current cap. Change the pins in `idf.py menuconfig` under "Pico Bulb". The LED count and current cap can also be set per bulb with `tools/provision.py`.
 

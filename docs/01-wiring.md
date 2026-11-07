@@ -43,8 +43,8 @@
 
 ## Rules of thumb
 
-- **Power.** Each LED draws up to ~60 mA at full white, so 24 LEDs can draw ~1.4 A. A laptop USB port gives about 500 mA, so the bench config caps the strip at **450 mA** (`CONFIG_BULB_MAX_MILLIAMPS`). For a real lamp, feed the strip from its own 5V supply, connect all the GNDs together, and raise the cap to match the supply.
+- **Power.** Each LED draws up to ~60 mA at full white, so 24 LEDs can draw ~1.4 A. A laptop USB port gives about 500 mA, so on the bench cap the strip at **450 mA** with `tools/provision.py --max-ma 450`. For a real lamp, feed the strip from its own 5V supply, connect all the GNDs together, and raise the cap to match the supply.
 - **Data level.** The C6 outputs 3.3V, while WS2812 strips officially expect about 3.5V at 5V supply. Short wires usually work without a level shifter. If the first LED flickers or shows wrong colours, add a 74AHCT125 between GP18 and DIN.
 - **Avoid these pins:** GP8 (the onboard RGB LED), GP9 and GP15 (they decide the boot mode), and GP12/GP13 (USB).
 - **PIR placement.** Keep the PIR away from the board's antenna and from the LEDs. WiFi transmissions and heat can both cause false triggers. After power-up, the sensor needs 10–60 s to settle.
-- To use **other pins or a different LED count**, run `idf.py menuconfig` and open "Pico Bulb".
+- To use **other pins**, run `idf.py menuconfig` and open "Pico Bulb". For a **different LED count**, use `tools/provision.py --led-count`.

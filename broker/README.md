@@ -13,7 +13,7 @@ Browsers can't open raw TCP sockets, so the app has to talk to the broker over W
 
 ## Quick setup (recommended)
 
-`setup-server.sh` does all the steps below. It's safe to re-run, it never touches the existing Apache sites, and it gets the certificate via webroot in `/var/www/acme`, so Apache keeps running:
+`setup-server.sh` does all the steps below, and also sets up the Apache site that serves firmware updates, which only the script covers. It's safe to re-run, it never touches the existing Apache sites, and it gets the certificate via webroot in `/var/www/acme`, so Apache keeps running:
 
 ```sh
 # on the server
