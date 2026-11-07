@@ -4,5 +4,5 @@ user app
 topic readwrite pico/#
 
 # Every bulb logs in with username == bulb id and may only touch its own subtree:
-#   pico/bulb/<id>/{status,state,set,motion,schedule,schedule_set,cmd,info}
+#   pico/bulb/<id>/{status,state,set,motion,schedule,schedule_set,cmd,info,log,coredump}
 pattern readwrite pico/bulb/%u/#

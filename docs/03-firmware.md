@@ -142,6 +142,57 @@ Opening the USB port restarts this board, and that counts as a power-up, so the 
 
 **To go back on purpose:** check out the older commit, then build and publish it. Any version other than the running one installs.
 
+## Debug a bulb remotely
+
+These all work with no cable. Breakpoints and stepping still need USB.
+
+**Health.** The bulb sends `info` when it connects, every 5 minutes, and whenever an update, logging or a saved crash changes:
+
+```sh
+mosquitto_sub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/info -v
+```
+
+| Field | What to look for |
+|-------|------------------|
+| `reset` | Why it last started: `power_on`, `usb`, `software` (such as an update), `crash`, `watchdog`, `brownout`, `external` or `other`. `brownout` points at the power supply |
+| `uptime` | Seconds since then. If it keeps dropping, the bulb is restarting |
+| `heap_min` | The least free memory since it started, in bytes |
+| `stack` | Each task's lowest free stack, in bytes. If one drops below about 500, increase that task's `TASK_STACK_BYTES` |
+| `crash` | The crash saved in flash, or `null` |
+
+**Logs.** These stay off until you ask, and turn themselves off after an hour:
+
+```sh
+mosquitto_sub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/log
+mosquitto_pub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/cmd -m '{"cmd":"logs","on":true}'
+mosquitto_pub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/cmd -m '{"cmd":"logs","on":false}'
+```
+
+If the bulb loses its connection, it holds on to the first 4 KB or so of lines and sends them when it's back. Later lines are lost until then.
+
+**Crashes.** After a crash the bulb restarts, and `info` shows the task and address. For the full report, run this from `firmware/`:
+
+```sh
+python tools/fetch_coredump.py living-room           # prints the crash report; --gdb opens it in GDB
+python tools/fetch_coredump.py living-room --erase   # the same, then clears it from the bulb
+```
+
+It needs the `.elf` of the firmware that crashed. It finds this in `releases/` for anything you published, and `--elf <file>` covers a build flashed over USB. The dump stays on the bulb until you erase it, and a new crash replaces it.
+
+A core dump holds the contents of the bulb's task stacks, which can include its passwords. The tool saves it as a private file in `releases/`, which git ignores. Delete it when you're done, and don't share it. Anyone with the `app` password can read logs and dumps, as well as control the bulbs.
+
+## Before you seal a bulb
+
+Once it's sealed, the bulb's settings, partition table and bootloader can only change over USB. Check each of these on the bulb first:
+
+- [ ] `tools/provision.py` has set its settings, and the WiFi network is the one it will stay on. A new router or WiFi password means opening the bulb
+- [ ] `keys/signing.pem` is backed up, along with `releases/`
+- [ ] It installs an update over WiFi and comes back with `"confirmed":true`, with no flicker you can't live with
+- [ ] It reconnects by itself after the router is off for a few minutes
+- [ ] A power cut during an update leaves it working on the old version
+- [ ] A real power cycle turns the light on, and your alarm is still set
+- [ ] `info` shows a sensible `heap_min` and `stack`, and `crash` is `null`
+
 ## Test without a board
 
 The fade, gamma, current-limit and JSON logic has no ESP-IDF dependency, so its unit tests run on your PC. They need `g++` with C++23 support and CMake, and cJSON from `managed_components`, which appears after your first `idf.py build`. Run them in a shell where ESP-IDF is **not** activated, because its tools on `PATH` break the host compiler.

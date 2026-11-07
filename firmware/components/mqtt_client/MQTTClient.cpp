@@ -88,6 +88,12 @@ int MQTTClient::publish(const char* topic, std::string_view data, Qos qos, bool 
     return msg_id;
 }
 
+bool MQTTClient::send_now(const char* topic, std::string_view data) {
+    if (!is_connected()) return false;
+    return esp_mqtt_client_publish(client_, topic, data.data(), static_cast<int>(data.size()),
+                                   static_cast<int>(Qos::AtMostOnce), 0) >= 0;
+}
+
 esp_err_t MQTTClient::subscribe(const char* topic, Qos qos) {
     return esp_mqtt_client_subscribe(client_, topic, static_cast<int>(qos)) < 0 ? ESP_FAIL : ESP_OK;
 }

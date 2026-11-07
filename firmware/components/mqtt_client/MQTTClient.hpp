@@ -50,6 +50,12 @@ public:
     /** Queue a payload for sending, from any task. Returns msg id, or -1 on failure. */
     int publish(const char* topic, std::string_view data, Qos qos = Qos::AtMostOnce, bool retain = false);
 
+    /**
+     * Send straight away, unretained and at QoS 0, for high-volume data. Blocks until it's
+     * written, unlike publish(), whose queue only moves about one message per poll.
+     */
+    bool send_now(const char* topic, std::string_view data);
+
     [[nodiscard]] esp_err_t subscribe(const char* topic, Qos qos = Qos::AtMostOnce);
 
     [[nodiscard]] esp_err_t reconnect();

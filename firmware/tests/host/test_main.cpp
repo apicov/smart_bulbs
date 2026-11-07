@@ -393,6 +393,18 @@ void test_parse_debug_command() {
     CHECK(!parse_debug_command("{}"));
     CHECK(!parse_debug_command(R"({"cmd":1})"));
     CHECK(!parse_debug_command(R"({"cmd":"reboot"})"));
+
+    const auto logs_on = parse_debug_command(R"({"cmd":"logs","on":true})");
+    CHECK(logs_on && logs_on->kind == DebugCommand::Kind::Logs && logs_on->on);
+    const auto logs_off = parse_debug_command(R"({"cmd":"logs","on":false})");
+    CHECK(logs_off && logs_off->kind == DebugCommand::Kind::Logs && !logs_off->on);
+    CHECK(!parse_debug_command(R"({"cmd":"logs"})"));  // has to say which
+    CHECK(!parse_debug_command(R"({"cmd":"logs","on":1})"));
+    const auto dump = parse_debug_command(R"({"cmd":"coredump"})");
+    CHECK(dump && dump->kind == DebugCommand::Kind::Coredump);
+    const auto erase = parse_debug_command(R"({"cmd":"coredump_erase"})");
+    CHECK(erase && erase->kind == DebugCommand::Kind::CoredumpErase);
+
     // A message can't choose where an update comes from: extra fields change nothing.
     const auto with_url = parse_debug_command(R"({"cmd":"ota","url":"https://evil.example/x.bin"})");
     CHECK(with_url && !with_url->force);
@@ -400,23 +412,65 @@ void test_parse_debug_command() {
 
 void test_format_info() {
     const auto text = [](const DeviceInfo& info) { return std::string{format_info(info).view()}; };
-    CHECK(text({.version = "abc1234", .confirmed = true, .rolled_back = {}, .ota = "idle", .progress = 0}) ==
-          R"({"version":"abc1234","confirmed":true,"rolled_back":null,"ota":"idle","progress":0})");
-    CHECK(text({.version = "v2",
-                .confirmed = false,
-                .rolled_back = "v3",
-                .ota = "downloading",
-                .progress = 40}) ==
-          R"({"version":"v2","confirmed":false,"rolled_back":"v3","ota":"downloading","progress":40})");
+    const TaskStacks stack{.light = 1, .pir = 2, .schedule = 3, .ota = 4, .debug = 5};
+    CHECK(
+        text({.version = "abc1234",
+              .reset = "power_on",
+              .uptime_s = 60,
+              .confirmed = true,
+              .rolled_back = {},
+              .ota = "idle",
+              .progress = 0,
+              .logs = false,
+              .heap_min = 1000,
+              .stack = stack,
+              .crash = std::nullopt}) ==
+        R"({"version":"abc1234","reset":"power_on","uptime":60,"confirmed":true,"rolled_back":null,"ota":"idle","progress":0,"logs":false,"heap_min":1000,"stack":{"light":1,"pir":2,"schedule":3,"ota":4,"debug":5},"crash":null})");
+
+    CrashSummary crash;
+    (void)std::snprintf(crash.task.data(), crash.task.size(), "main");
+    (void)std::snprintf(crash.elf.data(), crash.elf.size(), "760585b2");
+    crash.pc = 0x42001234;
+    crash.ra = 0x420000ff;
+    crash.cause = 2;
+    crash.value = 7;
+    CHECK(
+        text({.version = "v2",
+              .reset = "crash",
+              .uptime_s = 1,
+              .confirmed = false,
+              .rolled_back = "v3",
+              .ota = "downloading",
+              .progress = 40,
+              .logs = true,
+              .heap_min = 1,
+              .stack = stack,
+              .crash = crash})
+            .ends_with(
+                R"("crash":{"task":"main","pc":"0x42001234","ra":"0x420000ff","cause":2,"value":7,"elf":"760585b2"}})"));
 
     // The longest possible message fits.
     const std::string longest(31, 'x');
+    CrashSummary big;
+    big.task.fill('t');
+    big.task.back() = '\0';
+    big.elf.fill('e');
+    big.elf.back() = '\0';
+    big.pc = big.ra = big.cause = big.value = 0xFFFFFFFF;
+    const unsigned most = 0xFFFFFFFF;
     const std::string json = text({.version = longest,
+                                   .reset = "power_on",
+                                   .uptime_s = 0xFFFFFFFF,
                                    .confirmed = false,
                                    .rolled_back = longest,
                                    .ota = "unconfirmed",
-                                   .progress = 100});
-    CHECK(json.ends_with(R"("ota":"unconfirmed","progress":100})"));
+                                   .progress = 100,
+                                   .logs = false,
+                                   .heap_min = 0xFFFFFFFF,
+                                   .stack = {most, most, most, most, most},
+                                   .crash = big});
+    CHECK(json.ends_with("}}"));
+    CHECK(json.size() < 512);
     CHECK(std::string_view{ota_status_name(OtaStatus::Rejected)} == "rejected");
 }
 

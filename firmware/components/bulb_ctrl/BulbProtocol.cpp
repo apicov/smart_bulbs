@@ -148,9 +148,21 @@ std::optional<DebugCommand> parse_debug_command(std::string_view json) {
     if (!cJSON_IsObject(root.get())) return std::nullopt;
 
     const cJSON* cmd = cJSON_GetObjectItem(root.get(), "cmd");
-    if (!cJSON_IsString(cmd) || std::string_view{cmd->valuestring} != "ota") return std::nullopt;
-    return DebugCommand{.kind = DebugCommand::Kind::Ota,
-                        .force = cJSON_IsTrue(cJSON_GetObjectItem(root.get(), "force")) != 0};
+    if (!cJSON_IsString(cmd)) return std::nullopt;
+    const std::string_view name{cmd->valuestring};
+
+    using enum DebugCommand::Kind;
+    if (name == "ota")
+        return DebugCommand{.kind = Ota,
+                            .force = cJSON_IsTrue(cJSON_GetObjectItem(root.get(), "force")) != 0};
+    if (name == "logs") {
+        const cJSON* on = cJSON_GetObjectItem(root.get(), "on");
+        if (!cJSON_IsBool(on)) return std::nullopt;
+        return DebugCommand{.kind = Logs, .on = cJSON_IsTrue(on) != 0};
+    }
+    if (name == "coredump") return DebugCommand{.kind = Coredump};
+    if (name == "coredump_erase") return DebugCommand{.kind = CoredumpErase};
+    return std::nullopt;
 }
 
 InfoJson format_info(const DeviceInfo& info) {
@@ -165,12 +177,25 @@ InfoJson format_info(const DeviceInfo& info) {
                             static_cast<int>(failed.size()), failed.data());
     }
 
+    std::array<char, 128> crash{"null"};
+    if (info.crash) {
+        (void)std::snprintf(
+            crash.data(), crash.size(),
+            R"({"task":"%s","pc":"0x%08lx","ra":"0x%08lx","cause":%lu,"value":%lu,"elf":"%s"})",
+            info.crash->task.data(), static_cast<unsigned long>(info.crash->pc),
+            static_cast<unsigned long>(info.crash->ra), static_cast<unsigned long>(info.crash->cause),
+            static_cast<unsigned long>(info.crash->value), info.crash->elf.data());
+    }
+
     InfoJson out;
-    const int n =
-        std::snprintf(out.buf_.data(), out.buf_.size(),
-                      R"({"version":"%.*s","confirmed":%s,"rolled_back":%s,"ota":"%s","progress":%u})",
-                      static_cast<int>(version.size()), version.data(), info.confirmed ? "true" : "false",
-                      rolled_back.data(), info.ota, info.progress);
+    const int n = std::snprintf(
+        out.buf_.data(), out.buf_.size(),
+        R"({"version":"%.*s","reset":"%s","uptime":%lu,"confirmed":%s,"rolled_back":%s,"ota":"%s","progress":%u,"logs":%s,"heap_min":%lu,"stack":{"light":%u,"pir":%u,"schedule":%u,"ota":%u,"debug":%u},"crash":%s})",
+        static_cast<int>(version.size()), version.data(), info.reset,
+        static_cast<unsigned long>(info.uptime_s), info.confirmed ? "true" : "false", rolled_back.data(),
+        info.ota, info.progress, info.logs ? "true" : "false", static_cast<unsigned long>(info.heap_min),
+        info.stack.light, info.stack.pir, info.stack.schedule, info.stack.ota, info.stack.debug,
+        crash.data());
     out.len_ = static_cast<std::size_t>(n);
     return out;
 }

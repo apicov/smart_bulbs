@@ -17,6 +17,7 @@ public:
     Mutex& operator=(const Mutex&) = delete;
 
     void lock() { xSemaphoreTake(handle_, portMAX_DELAY); }
+    bool try_lock() { return xSemaphoreTake(handle_, 0) == pdTRUE; }
     void unlock() { xSemaphoreGive(handle_); }
 
 private:

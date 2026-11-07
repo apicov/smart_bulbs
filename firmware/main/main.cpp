@@ -13,6 +13,7 @@
 #include <esp_mac.h>
 #include <esp_netif_sntp.h>
 #include <esp_system.h>
+#include <esp_timer.h>
 #include <nvs_flash.h>
 
 #include <BulbConfig.hpp>
@@ -21,6 +22,7 @@
 #include <MQTTClient.hpp>
 #include <OtaUpdater.hpp>
 #include <Pir.hpp>
+#include <RemoteDebug.hpp>
 #include <WiFiStation.hpp>
 
 namespace {
@@ -69,6 +71,29 @@ bool restarted_by_firmware() {
     }
 }
 
+const char* reset_reason_name(esp_reset_reason_t reason) {
+    switch (reason) {
+    case ESP_RST_POWERON:
+        return "power_on";
+    case ESP_RST_EXT:
+        return "external";
+    case ESP_RST_SW:
+        return "software";
+    case ESP_RST_PANIC:
+        return "crash";
+    case ESP_RST_INT_WDT:
+    case ESP_RST_TASK_WDT:
+    case ESP_RST_WDT:
+        return "watchdog";
+    case ESP_RST_BROWNOUT:
+        return "brownout";
+    case ESP_RST_USB:
+        return "usb";
+    default:
+        return "other";
+    }
+}
+
 Topic make_topic(const BulbId& id, const char* leaf) {
     Topic topic{};
     (void)std::snprintf(topic.data(), topic.size(), "%s/%s/%s", CONFIG_BULB_TOPIC_PREFIX, id.data(), leaf);
@@ -112,6 +137,12 @@ public:
                                              .connected = [this] { return mqtt_.is_connected(); },
                                              .before_restart = [this] { ctrl_.flush(); },
                                              .on_status = [this] { publish_info(); }});
+            debug_.start(
+                {.connected = [this] { return mqtt_.is_connected(); },
+                 .send_log = [this](std::string_view line) { return mqtt_.send_now(t_log_.data(), line); },
+                 .send_dump =
+                     [this](std::string_view chunk) { return mqtt_.send_now(t_coredump_.data(), chunk); },
+                 .report = [this] { publish_info(); }});
             ESP_ERROR_CHECK_WITHOUT_ABORT(wifi_.start(
                 config_->wifi_ssid.data(), config_->wifi_password.data(), [this] { on_wifi_connected(); }));
         } else {
@@ -164,9 +195,9 @@ private:
         ESP_ERROR_CHECK_WITHOUT_ABORT(mqtt_.subscribe(t_set_.data(), Qos::AtLeastOnce));
         ESP_ERROR_CHECK_WITHOUT_ABORT(mqtt_.subscribe(t_schedule_set_.data(), Qos::AtLeastOnce));
         ESP_ERROR_CHECK_WITHOUT_ABORT(mqtt_.subscribe(t_cmd_.data(), Qos::AtLeastOnce));
-        ESP_LOGI(TAG, "Lowest free stack: light %zu B, pir %zu B, schedule %zu B, ota %zu B",
+        ESP_LOGI(TAG, "Lowest free stack: light %zu B, pir %zu B, schedule %zu B, ota %zu B, debug %zu B",
                  engine_.stack_free_bytes(), pir_.stack_free_bytes(), ctrl_.stack_free_bytes(),
-                 ota_.stack_free_bytes());
+                 ota_.stack_free_bytes(), debug_.stack_free_bytes());
     }
 
     void on_mqtt_message(std::string_view topic, std::string_view payload, bool retained) {
@@ -184,15 +215,39 @@ private:
             ESP_LOGW(TAG, "Ignoring unknown command: %.*s", static_cast<int>(payload.size()), payload.data());
             return;
         }
-        ota_.request(cmd->force);
+        switch (cmd->kind) {
+        case DebugCommand::Kind::Ota:
+            ota_.request(cmd->force);
+            break;
+        case DebugCommand::Kind::Logs:
+            debug_.set_logs(cmd->on);
+            break;
+        case DebugCommand::Kind::Coredump:
+            debug_.request_dump();
+            break;
+        case DebugCommand::Kind::CoredumpErase:
+            debug_.request_erase();
+            break;
+        }
     }
 
     void publish_info() {
-        const InfoJson json = format_info({.version = OtaUpdater::running_version(),
-                                           .confirmed = ota_.confirmed(),
-                                           .rolled_back = ota_.rolled_back_version(),
-                                           .ota = ota_status_name(ota_.status()),
-                                           .progress = ota_.progress()});
+        const InfoJson json =
+            format_info({.version = OtaUpdater::running_version(),
+                         .reset = reset_reason_name(esp_reset_reason()),
+                         .uptime_s = static_cast<uint32_t>(esp_timer_get_time() / 1000000),
+                         .confirmed = ota_.confirmed(),
+                         .rolled_back = ota_.rolled_back_version(),
+                         .ota = ota_status_name(ota_.status()),
+                         .progress = ota_.progress(),
+                         .logs = debug_.logs_on(),
+                         .heap_min = esp_get_minimum_free_heap_size(),
+                         .stack = {.light = static_cast<unsigned>(engine_.stack_free_bytes()),
+                                   .pir = static_cast<unsigned>(pir_.stack_free_bytes()),
+                                   .schedule = static_cast<unsigned>(ctrl_.stack_free_bytes()),
+                                   .ota = static_cast<unsigned>(ota_.stack_free_bytes()),
+                                   .debug = static_cast<unsigned>(debug_.stack_free_bytes())},
+                         .crash = debug_.crash()});
         mqtt_.publish(t_info_.data(), json.view(), Qos::AtLeastOnce, true);
     }
 
@@ -219,6 +274,8 @@ private:
     const Topic t_schedule_set_ = make_topic(id_, "schedule_set");
     const Topic t_cmd_ = make_topic(id_, "cmd");
     const Topic t_info_ = make_topic(id_, "info");
+    const Topic t_log_ = make_topic(id_, "log");
+    const Topic t_coredump_ = make_topic(id_, "coredump");
 
     LightEngine engine_;
     BulbCtrl ctrl_{engine_};
@@ -226,6 +283,7 @@ private:
     WiFiStation wifi_;
     MQTTClient mqtt_;
     OtaUpdater ota_;
+    RemoteDebug debug_;
     bool time_sync_started_ = false;
 };
 

@@ -28,7 +28,12 @@
 //
 // Maintenance, on their own topics:
 //   cmd:  {"cmd":"ota"}, or {"cmd":"ota","force":true} to retry a version that was rolled back
-//   info: {"version":"abc1234","confirmed":true,"rolled_back":null,"ota":"idle","progress":0}
+//         {"cmd":"logs","on":true|false}, {"cmd":"coredump"}, {"cmd":"coredump_erase"}
+//   info: {"version":"abc1234","reset":"power_on","uptime":60,"confirmed":true,"rolled_back":null,
+//          "ota":"idle","progress":0,"logs":false,"heap_min":120000,
+//          "stack":{"light":3500,"pir":2800,"schedule":3000,"ota":7500,"debug":4000},
+//          "crash":{"task":"main","pc":"0x42001234","ra":"0x42001200","cause":2,"value":0,"elf":"760585b2"}}
+//         "crash" is null when none is saved.
 
 struct Command {
     LightState state;
@@ -84,21 +89,47 @@ private:
                                            const Alarm& alarm);
 
 struct DebugCommand {
-    enum class Kind : uint8_t { Ota };
+    enum class Kind : uint8_t { Ota, Logs, Coredump, CoredumpErase };
     Kind kind;
-    bool force = false;
+    bool force = false;  ///< Ota: retry a version that was rolled back.
+    bool on = false;     ///< Logs: start or stop.
 };
 
 /** Parse a `cmd` payload. Empty if it isn't a command this firmware knows. */
 [[nodiscard]] std::optional<DebugCommand> parse_debug_command(std::string_view json);
 
+/** The crash saved in flash. This chip's summary has no backtrace: that takes the full core dump. */
+struct CrashSummary {
+    std::array<char, 16> task{};
+    uint32_t pc = 0;
+    uint32_t ra = 0;
+    uint32_t cause = 0;
+    uint32_t value = 0;
+    std::array<char, 10> elf{};  ///< Start of the crashed image's ELF hash, to find its .elf.
+};
+
+/** Each task's lowest free stack, in bytes. */
+struct TaskStacks {
+    unsigned light;
+    unsigned pir;
+    unsigned schedule;
+    unsigned ota;
+    unsigned debug;
+};
+
 /** What's reported on `info`. */
 struct DeviceInfo {
     std::string_view version;
+    const char* reset;  ///< A fixed name for why the bulb last started.
+    uint32_t uptime_s;
     bool confirmed;                ///< False until a new image has proved itself.
     std::string_view rolled_back;  ///< The version that failed here, or empty.
     const char* ota;               ///< One of ota_status_name()'s fixed names.
     uint8_t progress;
+    bool logs;
+    uint32_t heap_min;
+    TaskStacks stack;
+    std::optional<CrashSummary> crash;
 };
 
 /** A formatted info message, big enough for the longest possible one. */
@@ -108,7 +139,7 @@ public:
 
 private:
     friend InfoJson format_info(const DeviceInfo& info);
-    std::array<char, 192> buf_{};
+    std::array<char, 512> buf_{};
     std::size_t len_ = 0;
 };
 
