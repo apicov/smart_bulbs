@@ -17,7 +17,7 @@ constexpr int HTTP_BUFFER_BYTES = 2048;
 constexpr uint8_t PROGRESS_STEP = 10;  // percent between reports
 constexpr TickType_t PROVE_PERIOD = pdMS_TO_TICKS(1000);
 constexpr TickType_t WAIT_PERIOD = pdMS_TO_TICKS(1000);
-constexpr TickType_t REPORT_TIME = pdMS_TO_TICKS(1000);  // for the last message to leave
+constexpr TickType_t REPORT_TIME = pdMS_TO_TICKS(4000);  // esp-mqtt takes seconds to send queued messages
 
 std::chrono::seconds since_boot() {
     return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::microseconds{esp_timer_get_time()});
@@ -124,8 +124,8 @@ void OtaUpdater::update(bool force) {
 }
 
 bool OtaUpdater::download(bool force) {
+    progress_.store(0);
     set_status(OtaStatus::Checking);
-    set_progress(0);
 
     esp_http_client_config_t http{};
     http.url = url_;

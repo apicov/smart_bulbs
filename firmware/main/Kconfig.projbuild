@@ -46,5 +46,7 @@ config BULB_POWER_ON_LIGHT
     help
         If enabled, the bulb lights up with its last colour/brightness when
         power returns. If disabled, it restores its last on/off state too.
+        A restart by the firmware, such as after an update or a crash, always
+        restores the last on/off state.
 
 endmenu

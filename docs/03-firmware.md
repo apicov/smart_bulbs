@@ -66,7 +66,7 @@ main: Bulb id: living-room (topics pico/bulb/living-room/*)
 light_engine: Started: 24 LEDs on GPIO18, limit 450 mA     ← strip fades up to warm white
 wifi_station: Got IP 192.168.x.x
 mqtt_client: Connected to broker
-main: Lowest free stack: light 2800 B, pir 1500 B, schedule 2000 B   ← your numbers will differ
+main: Lowest free stack: light 2800 B, pir 1500 B, schedule 2000 B, ota 7500 B   ← your numbers will differ
 bulb_ctrl: Clock set: Fri 2026-11-06 21:30:00 CET          ← should match your clock
 pir: motion detected                                       ← wave at the sensor
 ```
@@ -122,7 +122,11 @@ mosquitto_sub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/info -v
 mosquitto_pub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/cmd -m '{"cmd":"ota"}'
 ```
 
-`info` shows `checking`, `downloading`, then `restarting`. After the restart it shows the new `version` with `"confirmed":false`, which changes to `true` after 30 seconds connected to the broker.
+`info` shows `checking`, `downloading`, then `restarting`. After the restart it shows the new `version` with `"confirmed":false`, which changes to `true` after 30 seconds connected to the broker. Expect about a minute in all, with the download taking about 30 seconds.
+
+The light keeps running during the download. It goes dark briefly during the restart, then fades back to the on or off state it had before. Saved settings and alarms aren't affected.
+
+Opening the USB port restarts this board, and that counts as a power-up, so the light turns on. It also drops any MQTT command sent while the bulb is reconnecting, so wait for `online` on the `status` topic before sending one.
 
 | `ota` in `info` | What it means |
 |-----------------|---------------|

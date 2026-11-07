@@ -48,8 +48,12 @@ esp_err_t BulbCtrl::start(bool power_on_light, JsonListener on_state, JsonListen
     ESP_RETURN_ON_ERROR(esp_timer_create(&args, &save_timer_), TAG, "save timer");
 
     load();
-    // A bulb behind a wall switch should light up when power returns.
-    if (power_on_light) state_.on = true;
+    // A bulb behind a wall switch should light up when power returns. Saved, so that
+    // a later firmware restart doesn't go back to the state from before the power-up.
+    if (power_on_light && !state_.on) {
+        state_.on = true;
+        save();
+    }
     engine_.set(state_, BOOT_FADE);
 
     task_.start<&BulbCtrl::schedule_loop>("schedule", TASK_PRIORITY, this);
