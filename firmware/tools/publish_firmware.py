@@ -3,7 +3,7 @@
 
 Commit, build, then run from an activated ESP-IDF shell:
 
-    idf.py build
+    idf.py reconfigure build     # plain `build` can keep the old version number
     python tools/publish_firmware.py
 
 It refuses a build that has uncommitted changes, doesn't match the current
@@ -44,14 +44,14 @@ def problem_with(build: Path) -> str | None:
     binary = build / f"{PROJECT}.bin"
     elf = build / f"{PROJECT}.elf"
     if not (description.is_file() and binary.is_file() and elf.is_file()):
-        return f"no complete build in {build}: run `idf.py build`"
+        return f"no complete build in {build}: run `idf.py reconfigure build`"
 
     built = json.loads(description.read_text())["project_version"]
     current = git_version()
     if current.endswith("-dirty"):
         return "there are uncommitted changes: commit first, so the version says what's in it"
     if built != current:
-        return f"the build is version {built} but the source is {current}: run `idf.py build`"
+        return f"the build is version {built} but the source is {current}: run `idf.py reconfigure build`"
     if len(built) > MAX_VERSION_LENGTH:
         return f"version {built} is longer than {MAX_VERSION_LENGTH} characters, so bulbs would misread it"
 

@@ -109,7 +109,7 @@ Bulbs running this firmware can update without a cable. Changes to the partition
 
 ```sh
 cd firmware
-idf.py build
+idf.py reconfigure build             # plain `build` can keep the old version number
 python tools/publish_firmware.py     # --server <login> if you don't use tsp@mqtt.apicov.xyz
 ```
 
