@@ -17,8 +17,10 @@ add_executable(host_tests
     ${FIRMWARE}/components/bulb_ctrl/BulbProtocol.cpp
     ${CJSON}/cJSON.c)
 target_include_directories(host_tests PRIVATE
+    ${FIRMWARE}/components/bulb_config
     ${FIRMWARE}/components/bulb_ctrl
     ${FIRMWARE}/components/light_engine
+    ${FIRMWARE}/components/ota_updater
     ${FIRMWARE}/components/support
     ${CJSON})
 # Trap mode needs no sanitizer runtime library to be installed.

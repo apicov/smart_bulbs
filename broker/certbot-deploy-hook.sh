@@ -14,3 +14,5 @@ install -m 640 -o root -g mosquitto "$SRC/fullchain.pem" "$DST/fullchain.pem"
 install -m 640 -o root -g mosquitto "$SRC/privkey.pem"   "$DST/privkey.pem"
 restorecon -R "$DST" 2>/dev/null || true
 systemctl restart mosquitto
+# Apache serves firmware with this certificate too. Bulbs refuse an expired one.
+systemctl reload httpd 2>/dev/null || true

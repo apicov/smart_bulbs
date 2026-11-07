@@ -9,33 +9,55 @@ source ~/.espressif/tools/activate_idf_v6.0.1.sh
 alias idf.py='python $IDF_PATH/tools/idf.py'     # if idf.py isn't on PATH
 ```
 
-## Configure the bulb
+## One-time: create your signing key
 
-Secrets live in `firmware/sdkconfig.defaults.local`. Git ignores this file, so it never ends up on GitHub.
+Bulbs only accept updates signed with this key. Create it once and use the same one for every bulb:
 
 ```sh
 cd firmware
-cp sdkconfig.defaults.local.example sdkconfig.defaults.local
+mkdir -p keys
+python -m espsecure generate-signing-key --version 2 --scheme rsa3072 keys/signing.pem
 ```
 
-| Key | Value |
-|-----|-------|
-| `CONFIG_BULB_ID` | Bulb id, e.g. `living-room`. Must match its MQTT username |
-| `CONFIG_BULB_WIFI_SSID` / `_PASSWORD` | A **2.4 GHz** network (the C6 has no 5 GHz) |
-| `CONFIG_BULB_MQTT_URI` | `mqtts://mqtt.apicov.xyz:8883` |
-| `CONFIG_BULB_MQTT_PASSWORD` | That bulb's password from the server |
-| `CONFIG_BULB_MAX_MILLIAMPS` | `450` when powered over USB; see [wiring](01-wiring.md) |
-
-After changing this file, delete `sdkconfig` so the build reads it again.
+Git ignores `keys/`. **Back this file up somewhere safe and private.** If you lose it, every bulb needs USB before it can take another update. If someone else gets it, they can sign firmware your bulbs will accept.
 
 ## Build and flash
 
 ```sh
-rm -f sdkconfig            # only after editing sdkconfig.defaults.local
-idf.py build flash monitor # Ctrl+] to leave the monitor
+idf.py build flash    # run `rm -f sdkconfig` first if you've pulled new sdkconfig.defaults settings
 ```
 
 If the serial port isn't found, hold **BOOT**, tap **RESET**, then run the command again.
+
+## Give the bulb its settings
+
+The firmware image holds no passwords, so every bulb can run the same one. Each bulb's id and secrets go into its own flash partition over USB:
+
+```sh
+python tools/provision.py --id living-room --wifi-ssid my-wifi --mqtt-uri mqtts://mqtt.apicov.xyz:8883 --max-ma 450
+idf.py monitor        # Ctrl+] to leave the monitor
+```
+
+It asks for the WiFi and MQTT passwords, so they stay out of your shell history.
+
+| Option | Value |
+|-----|-------|
+| `--id` | Bulb id, e.g. `living-room`. Must match its MQTT username |
+| `--wifi-ssid` | A **2.4 GHz** network (the C6 has no 5 GHz) |
+| `--mqtt-uri` | `mqtts://mqtt.apicov.xyz:8883` |
+| `--max-ma` | Optional. `450` when powered over USB; see [wiring](01-wiring.md) |
+| `--led-count` | Optional, if the strip doesn't have 24 LEDs |
+| `--port` | Optional, if the serial port isn't found automatically |
+
+To change a setting, run it again with all the values. Saved colours and alarms aren't touched. A bulb with no settings still works as a plain lamp and logs `Not provisioned`.
+
+**A new router or WiFi password needs USB**, so keep this in mind before sealing a bulb.
+
+If you still have a `sdkconfig.defaults.local` from an earlier version, this copies its settings across, after which you can delete the file:
+
+```sh
+python tools/provision.py --from sdkconfig.defaults.local
+```
 
 ## What a healthy boot looks like
 
@@ -79,6 +101,43 @@ mosquitto_pub … -m '{"state":"OFF","transition":3}'     # slow fade out
 mosquitto_pub … -m '{"timer":{"after":60,"fade":10}}'   # off in 60 s, fading for the last 10 s
 ```
 
+## Update over WiFi
+
+Bulbs running this firmware can update without a cable. Changes to the partition table or bootloader still need USB. The first time only, run `sudo bash broker/setup-server.sh` on the server, as in [the broker guide](02-broker.md).
+
+**1. Commit, build and publish.** The version comes from git, so the tool refuses uncommitted changes.
+
+```sh
+cd firmware
+idf.py build
+python tools/publish_firmware.py     # --server <login> if you don't use tsp@mqtt.apicov.xyz
+```
+
+This changes nothing on any bulb. It keeps the `.bin` and `.elf` in `releases/<version>/`, which git ignores.
+
+**2. Watch and update one bulb.** Check it before updating the rest.
+
+```sh
+mosquitto_sub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/info -v
+mosquitto_pub -h $H -p 8883 $CA -u app -P "$P" -t pico/bulb/living-room/cmd -m '{"cmd":"ota"}'
+```
+
+`info` shows `checking`, `downloading`, then `restarting`. After the restart it shows the new `version` with `"confirmed":false`, which changes to `true` after 30 seconds connected to the broker.
+
+| `ota` in `info` | What it means |
+|-----------------|---------------|
+| `up_to_date` | The server has the version already running |
+| `busy` | A sleep timer or alarm is running, as a restart would lose it. Send the command again later |
+| `waiting` | Installed, and restarts when a timer or alarm that started during the download has finished |
+| `rolled_back` | This version failed on this bulb. Publish a fixed one, or add `"force":true` if the cause was something else, such as a broker outage |
+| `unconfirmed` | The running image hasn't been confirmed yet. Try again in a moment |
+| `rejected` | The image failed validation, such as a missing or wrong signature. Nothing changed |
+| `failed` | Download or flash error, with the reason in the log. Nothing changed |
+
+**If a new version is bad:** it has to reach the broker and stay connected for 30 seconds. If it crashes and restarts first, or hasn't managed that within 5 minutes, the bulb goes back to the previous version and reports it in `rolled_back`. A router or broker outage during those 5 minutes also causes a rollback, which is safe: retry with `"force":true`.
+
+**To go back on purpose:** check out the older commit, then build and publish it. Any version other than the running one installs.
+
 ## Test without a board
 
 The fade, gamma, current-limit and JSON logic has no ESP-IDF dependency, so its unit tests run on your PC. They need `g++` with C++23 support and CMake, and cJSON from `managed_components`, which appears after your first `idf.py build`. Run them in a shell where ESP-IDF is **not** activated, because its tools on `PATH` break the host compiler.
@@ -102,9 +161,12 @@ python tools/lint.py
 
 | Symptom | Likely cause |
 |---------|--------------|
+| `Not provisioned` or `running as a plain lamp` | Run `tools/provision.py`; see above |
+| Build fails looking for `keys/signing.pem` | Create or restore your signing key; see above |
 | Strip stays dark, log shows `Started` | Check the 5V/GND/DIN wiring and the DIN arrow direction on the strip (the arrow points away from the input) |
 | First LED is wrong or flickers | Data level too low: shorten the wire or add a 74AHCT125 |
 | No `Got IP` | Wrong SSID or password, or the network is 5 GHz only |
-| `Connection refused (check username/password/ACL)` | `CONFIG_BULB_ID` doesn't match the MQTT user, or the password is wrong |
+| `Connection refused (check username/password/ACL)` | The bulb's `--id` doesn't match the MQTT user, or the password is wrong |
 | TLS/handshake errors | URI must be `mqtts://…:8883`; check the board can reach the internet |
+| `ota` stays `failed`, log shows `Can't get https://…` | Nothing published yet, or the server's firmware vhost isn't set up. See [the broker guide](02-broker.md) |
 | Board resets when you go to full white | Power brown-out: lower `MAX_MILLIAMPS` or use a separate supply |

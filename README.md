@@ -19,12 +19,16 @@ DIY smart bulbs: an **ESP32-C6-Zero** drives a NeoPixel strip and reads a PIR se
 
 ```sh
 cd firmware
-cp sdkconfig.defaults.local.example sdkconfig.defaults.local   # WiFi + MQTT credentials (git-ignored)
 idf.py set-target esp32c6
-idf.py build flash monitor
+python -m espsecure generate-signing-key --version 2 --scheme rsa3072 keys/signing.pem   # once; back it up
+idf.py build flash
+python tools/provision.py --id living-room --wifi-ssid my-wifi --mqtt-uri mqtts://mqtt.example.com:8883
+idf.py monitor
 ```
 
-Default wiring: LED data on GPIO18, PIR on GPIO19, 24 LEDs, 1000 mA current cap. Change these in `idf.py menuconfig` under "Pico Bulb".
+Create `firmware/keys/` first if it doesn't exist. See [docs/03-firmware.md](docs/03-firmware.md) for the details.
+
+Default wiring: LED data on GPIO18, PIR on GPIO19, 24 LEDs, 1000 mA current cap. Change the pins in `idf.py menuconfig` under "Pico Bulb". The LED count and current cap can also be set per bulb with `tools/provision.py`.
 
 ## Server
 

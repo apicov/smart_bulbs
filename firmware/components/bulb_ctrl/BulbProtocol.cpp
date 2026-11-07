@@ -143,6 +143,38 @@ std::optional<ScheduleCommand> parse_schedule_command(std::string_view json, con
     return cmd;
 }
 
+std::optional<DebugCommand> parse_debug_command(std::string_view json) {
+    const JsonPtr root{cJSON_ParseWithLength(json.data(), json.size())};
+    if (!cJSON_IsObject(root.get())) return std::nullopt;
+
+    const cJSON* cmd = cJSON_GetObjectItem(root.get(), "cmd");
+    if (!cJSON_IsString(cmd) || std::string_view{cmd->valuestring} != "ota") return std::nullopt;
+    return DebugCommand{.kind = DebugCommand::Kind::Ota,
+                        .force = cJSON_IsTrue(cJSON_GetObjectItem(root.get(), "force")) != 0};
+}
+
+InfoJson format_info(const DeviceInfo& info) {
+    // An image's version field holds at most this many characters, so nothing here can overflow.
+    constexpr std::size_t MAX_VERSION = 31;
+    const std::string_view version = info.version.substr(0, MAX_VERSION);
+    const std::string_view failed = info.rolled_back.substr(0, MAX_VERSION);
+
+    std::array<char, MAX_VERSION + 3> rolled_back{"null"};  // room for the quotes and NUL
+    if (!failed.empty()) {
+        (void)std::snprintf(rolled_back.data(), rolled_back.size(), R"("%.*s")",
+                            static_cast<int>(failed.size()), failed.data());
+    }
+
+    InfoJson out;
+    const int n =
+        std::snprintf(out.buf_.data(), out.buf_.size(),
+                      R"({"version":"%.*s","confirmed":%s,"rolled_back":%s,"ota":"%s","progress":%u})",
+                      static_cast<int>(version.size()), version.data(), info.confirmed ? "true" : "false",
+                      rolled_back.data(), info.ota, info.progress);
+    out.len_ = static_cast<std::size_t>(n);
+    return out;
+}
+
 ScheduleJson format_schedule(bool time_synced, const std::optional<TimerStatus>& timer, const Alarm& alarm) {
     std::array<char, 48> timer_json{"null"};
     if (timer) {

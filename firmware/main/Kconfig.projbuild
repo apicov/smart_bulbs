@@ -1,32 +1,15 @@
 menu "Pico Bulb"
 
-config BULB_ID
-    string "Bulb id (empty = derived from MAC, e.g. bulb-a1b2c3)"
-    default ""
-    help
-        Used in MQTT topics (pico/bulb/<id>/...) and as the MQTT username,
-        so the broker ACL can restrict each bulb to its own topics.
-        A readable name like "living-room" is recommended.
-
-config BULB_WIFI_SSID
-    string "WiFi SSID"
-
-config BULB_WIFI_PASSWORD
-    string "WiFi password"
-
-config BULB_MQTT_URI
-    string "MQTT broker URI"
-    default "mqtts://broker.example.com:8883"
-    help
-        mqtts:// is verified against the built-in CA bundle (Let's Encrypt ok).
-
-config BULB_MQTT_PASSWORD
-    string "MQTT password (username is the bulb id)"
-    default ""
-
 config BULB_TOPIC_PREFIX
     string "MQTT topic prefix"
     default "pico/bulb"
+
+config BULB_OTA_URL
+    string "Firmware image URL"
+    default "https://mqtt.apicov.xyz/firmware/pico-bulb.bin"
+    help
+        Where updates are downloaded from, verified with the built-in CA bundle.
+        It's compiled in, so an MQTT message can't point a bulb somewhere else.
 
 config BULB_TIMEZONE
     string "Timezone (POSIX TZ string)"
@@ -42,12 +25,12 @@ config BULB_LED_GPIO
         Avoid strapping pins 4, 5, 8, 9, 15. GPIO8 drives the onboard RGB LED.
 
 config BULB_LED_COUNT
-    int "Number of LEDs"
+    int "Number of LEDs (tools/provision.py can override this per bulb)"
     range 1 1024
     default 24
 
 config BULB_MAX_MILLIAMPS
-    int "Strip current limit in mA (0 = unlimited)"
+    int "Strip current limit in mA, 0 = unlimited (tools/provision.py can override this per bulb)"
     default 1000
     help
         Frames are scaled down so the estimated draw stays below this.

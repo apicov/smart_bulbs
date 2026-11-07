@@ -25,6 +25,10 @@
 //                 an empty list means once.
 //   schedule:     {"time_synced":true,"timer":{"ends":unix_time,"fade":seconds},"alarm":{...}}
 //                 "timer" is null when none is running, and "ends" is 0 until the clock is set.
+//
+// Maintenance, on their own topics:
+//   cmd:  {"cmd":"ota"}, or {"cmd":"ota","force":true} to retry a version that was rolled back
+//   info: {"version":"abc1234","confirmed":true,"rolled_back":null,"ota":"idle","progress":0}
 
 struct Command {
     LightState state;
@@ -78,6 +82,37 @@ private:
 
 [[nodiscard]] ScheduleJson format_schedule(bool time_synced, const std::optional<TimerStatus>& timer,
                                            const Alarm& alarm);
+
+struct DebugCommand {
+    enum class Kind : uint8_t { Ota };
+    Kind kind;
+    bool force = false;
+};
+
+/** Parse a `cmd` payload. Empty if it isn't a command this firmware knows. */
+[[nodiscard]] std::optional<DebugCommand> parse_debug_command(std::string_view json);
+
+/** What's reported on `info`. */
+struct DeviceInfo {
+    std::string_view version;
+    bool confirmed;                ///< False until a new image has proved itself.
+    std::string_view rolled_back;  ///< The version that failed here, or empty.
+    const char* ota;               ///< One of ota_status_name()'s fixed names.
+    uint8_t progress;
+};
+
+/** A formatted info message, big enough for the longest possible one. */
+class InfoJson {
+public:
+    [[nodiscard]] std::string_view view() const { return {buf_.data(), len_}; }
+
+private:
+    friend InfoJson format_info(const DeviceInfo& info);
+    std::array<char, 192> buf_{};
+    std::size_t len_ = 0;
+};
+
+[[nodiscard]] InfoJson format_info(const DeviceInfo& info);
 
 /**
  * Versioned NVS record, so the struct can grow later without misreading old

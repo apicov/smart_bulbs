@@ -20,7 +20,7 @@ enum class Qos : int { AtMostOnce = 0, AtLeastOnce = 1 };
 class MQTTClient {
 public:
     using ConnectedCallback = Callback<void()>;
-    using MessageCallback = Callback<void(std::string_view topic, std::string_view payload)>;
+    using MessageCallback = Callback<void(std::string_view topic, std::string_view payload, bool retained)>;
 
     /** esp-mqtt copies these strings, so they only need to outlive start(). */
     struct Config {

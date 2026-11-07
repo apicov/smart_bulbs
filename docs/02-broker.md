@@ -19,7 +19,9 @@ cd ~/code/smart_bulbs && git pull                                    # later upd
 sudo bash broker/setup-server.sh
 ```
 
-The script is safe to re-run, and it leaves the existing Apache sites alone. It finishes with a self-test that should end in `✓ TLS login as app on 8883 works` and `✓ anonymous access refused`.
+The script is safe to re-run, and it leaves the existing Apache sites alone. It finishes with a self-test that should end in `✓ TLS login as app on 8883 works`, `✓ anonymous access refused` and `✓ firmware URL works`.
+
+It also serves firmware updates at `https://mqtt.apicov.xyz/firmware/`, from `/var/www/pico-firmware`. The user who ran `sudo` owns that folder, so `tools/publish_firmware.py` can upload without root. This uses port 443 and the same certificate, and Apache reloads when the certificate renews.
 
 ## Users and passwords
 
@@ -31,6 +33,6 @@ sudo broker/add-bulb.sh kitchen                # new bulb → prints its id + pa
 ```
 
 - The `app` password goes into the app's Settings page.
-- A bulb's password goes into that bulb's `firmware/sdkconfig.defaults.local`.
+- A bulb's password goes onto that bulb with `tools/provision.py`; see [the firmware guide](03-firmware.md).
 
 For the details, troubleshooting and the manual steps, see [broker/README.md](../broker/README.md).

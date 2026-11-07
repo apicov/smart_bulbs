@@ -1,9 +1,0 @@
-# Copy to sdkconfig.defaults.local (git-ignored) and fill in.
-# After changing it, run `idf.py fullclean` or delete sdkconfig so it is re-read.
-CONFIG_BULB_ID="living-room"
-CONFIG_BULB_WIFI_SSID="my-wifi"
-CONFIG_BULB_WIFI_PASSWORD="wifi-password"
-CONFIG_BULB_MQTT_URI="mqtts://mqtt.example.com:8883"
-CONFIG_BULB_MQTT_PASSWORD="bulb-password"
-# Strip powered from USB via the board's 5V pin: stay under the port's ~500 mA.
-CONFIG_BULB_MAX_MILLIAMPS=450

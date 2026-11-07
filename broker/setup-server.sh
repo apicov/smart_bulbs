@@ -18,7 +18,9 @@
 #   4. install mosquitto.conf + acl, create users app + $BULBS with random passwords
 #   5. install the certbot deploy hook (copies certs, restarts mosquitto on renewal)
 #   6. open 8883/8084 in firewalld (if active), start mosquitto
-#   7. self-test: TLS login works, anonymous is refused
+#   7. add an Apache HTTPS vhost for $DOMAIN serving firmware from /var/www/pico-firmware
+#      at /firmware/, writable by the user who ran sudo; existing sites are not touched
+#   8. self-test: TLS login works, anonymous is refused, the firmware URL answers
 # New passwords are printed at the end and kept in /root/pico-bulbs-credentials.txt (0600).
 set -euo pipefail
 
@@ -28,12 +30,30 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 CREDS=/root/pico-bulbs-credentials.txt
 PASSWD=/etc/mosquitto/passwd
 ACME_ROOT=/var/www/acme
+FIRMWARE_ROOT=/var/www/pico-firmware
 NEW_CREDS=()
 
 step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 ok()   { printf '    \033[32m✓\033[0m %s\n' "$*"; }
 die()  { printf '\n\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 randpw() { head -c 18 /dev/urandom | base64 | tr -d '/+='; }
+
+install_vhost() {  # install_vhost <new file> <destination>: test the config, or put the old one back
+  local tmp=$1 vhost=$2 backup=""
+  if cmp -s "$tmp" "$vhost"; then
+    rm -f "$tmp"; ok "vhost unchanged"
+    return
+  fi
+  [[ -f $vhost ]] && { backup="$vhost.bak.$(date +%s)"; cp -a "$vhost" "$backup"; }
+  install -m 644 "$tmp" "$vhost"; rm -f "$tmp"; restorecon "$vhost" || true
+  if apachectl configtest 2>&1 | grep -q 'Syntax OK'; then
+    systemctl reload httpd; ok "vhost installed, httpd reloaded"
+  else
+    apachectl configtest || true
+    if [[ -n $backup ]]; then mv -f "$backup" "$vhost"; else rm -f "$vhost"; fi
+    die "Apache config test failed — reverted $vhost, httpd untouched"
+  fi
+}
 
 [[ $EUID -eq 0 ]] || die "run with sudo"
 for f in mosquitto.conf acl certbot-deploy-hook.sh; do
@@ -75,20 +95,7 @@ else
     RewriteRule ^ - [R=404,L]
 </VirtualHost>
 EOF
-  if cmp -s "$tmp" "$VHOST"; then
-    rm -f "$tmp"; ok "vhost unchanged"
-  else
-    backup=""
-    [[ -f $VHOST ]] && { backup="$VHOST.bak.$(date +%s)"; cp -a "$VHOST" "$backup"; }
-    install -m 644 "$tmp" "$VHOST"; rm -f "$tmp"; restorecon "$VHOST" || true
-    if apachectl configtest 2>&1 | grep -q 'Syntax OK'; then
-      systemctl reload httpd; ok "vhost installed, httpd reloaded"
-    else
-      apachectl configtest || true
-      if [[ -n $backup ]]; then mv -f "$backup" "$VHOST"; else rm -f "$VHOST"; fi
-      die "Apache config test failed — reverted $VHOST, httpd untouched"
-    fi
-  fi
+  install_vhost "$tmp" "$VHOST"
 fi
 install -d -m 755 "$ACME_ROOT/.well-known/acme-challenge"
 
@@ -159,8 +166,38 @@ systemctl enable -q mosquitto
 systemctl is-active -q mosquitto || die "mosquitto is not running"
 ok "mosquitto enabled and running"
 
-# ---------------------------------------------------------------- 7. self-test
-step "7. Self-test against $DOMAIN"
+# ---------------------------------------------------------------- 7. firmware vhost
+step "7. Apache HTTPS vhost for firmware"
+rpm -q mod_ssl >/dev/null || dnf install -y mod_ssl
+# The owner uploads with tools/publish_firmware.py, without needing sudo.
+install -d -m 755 -o "${SUDO_USER:-root}" "$FIRMWARE_ROOT"
+restorecon -R "$FIRMWARE_ROOT" 2>/dev/null || true
+tmp="$(mktemp)"
+cat >"$tmp" <<EOF
+# Pico Bulbs firmware. The image holds no secrets, and only a signed one will install.
+<VirtualHost *:443>
+    ServerName $DOMAIN
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/$DOMAIN/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/$DOMAIN/privkey.pem
+    Alias /firmware/ $FIRMWARE_ROOT/
+    <Directory $FIRMWARE_ROOT>
+        Options -Indexes
+        Require all granted
+    </Directory>
+    RewriteEngine on
+    RewriteRule ^/(?!firmware/) - [R=404,L]
+</VirtualHost>
+EOF
+install_vhost "$tmp" /etc/httpd/conf.d/mqtt-firmware.conf
+if systemctl is-active -q firewalld; then
+  firewall-cmd -q --permanent --add-service=https
+  firewall-cmd -q --reload
+  ok "firewalld: https open"
+fi
+
+# ---------------------------------------------------------------- 8. self-test
+step "8. Self-test against $DOMAIN"
 # Use a CA bundle file: --capath /etc/ssl/certs only works where individual
 # hashed certs exist (Debian/Ubuntu). Fedora 44 dropped /etc/pki/tls/certs/ca-bundle.crt.
 CA=(--capath /etc/ssl/certs)
@@ -188,15 +225,21 @@ if timeout 10 mosquitto_pub -h "$DOMAIN" -p 8883 "${CA[@]}" -t pico/x -m x 2>/de
 else
   ok "anonymous access refused"
 fi
+code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "https://$DOMAIN/firmware/pico-bulb.bin" || true)"
+case "$code" in
+  200) ok "firmware URL works, and an image is published" ;;
+  404) ok "firmware URL works over TLS, nothing published yet" ;;
+  *)   die "firmware URL returned '$code' — check Apache and port 443" ;;
+esac
 
 # ---------------------------------------------------------------- summary
 step "Done"
 echo "    Bulbs: mqtts://$DOMAIN:8883      App: wss://$DOMAIN:8084"
+echo "    Firmware: https://$DOMAIN/firmware/pico-bulb.bin"
 if ((${#NEW_CREDS[@]})); then
   echo "    New credentials (also saved in $CREDS):"
   printf '      %s\n' "${NEW_CREDS[@]}"
-  echo "    For each bulb, put in firmware/sdkconfig.defaults.local:"
-  echo "      CONFIG_BULB_ID=\"<user>\"  CONFIG_BULB_MQTT_PASSWORD=\"<password>\""
-  echo "      CONFIG_BULB_MQTT_URI=\"mqtts://$DOMAIN:8883\""
+  echo "    For each bulb, run from firmware/ on your PC and enter its password when asked:"
+  echo "      python tools/provision.py --id <user> --wifi-ssid <network> --mqtt-uri mqtts://$DOMAIN:8883"
 fi
 echo "    All MQTT passwords created so far: sudo cat $CREDS"

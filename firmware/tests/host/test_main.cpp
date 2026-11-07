@@ -5,11 +5,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <string_view>
 
+#include "BulbConfig.hpp"
 #include "BulbProtocol.hpp"
 #include "Callback.hpp"
 #include "LightModel.hpp"
+#include "OtaPolicy.hpp"
 
 using namespace std::chrono_literals;
 
@@ -316,6 +319,107 @@ void test_stored_alarm_layout() {
     CHECK(bytes[7] == 0x01);
 }
 
+template <std::size_t N>
+void set_text(std::array<char, N>& field, std::string_view text) {
+    field.fill('\0');
+    std::copy(text.begin(), text.end(), field.begin());
+}
+
+BulbConfig good_config() {
+    BulbConfig config;
+    set_text(config.id, "living-room-2");
+    set_text(config.wifi_ssid, "my-wifi");
+    set_text(config.wifi_password, "12345678");
+    set_text(config.mqtt_uri, "mqtts://mqtt.example.com:8883");
+    set_text(config.mqtt_password, "secret");
+    config.led_count = 24;
+    return config;
+}
+
+void test_config_validation() {
+    CHECK(config_problem(good_config()) == nullptr);
+
+    const auto with = [](auto change) {
+        BulbConfig config = good_config();
+        change(config);
+        return config_problem(config);
+    };
+    CHECK(with([](BulbConfig& c) { set_text(c.id, ""); }) != nullptr);
+    CHECK(with([](BulbConfig& c) { set_text(c.id, "Living"); }) != nullptr);  // upper case
+    CHECK(with([](BulbConfig& c) { set_text(c.id, "a/b"); }) != nullptr);     // would change the topic
+    CHECK(with([](BulbConfig& c) { set_text(c.id, "a#"); }) != nullptr);      // an MQTT wildcard
+    CHECK(with([](BulbConfig& c) { set_text(c.wifi_ssid, ""); }) != nullptr);
+    CHECK(with([](BulbConfig& c) { set_text(c.wifi_password, "1234567"); }) != nullptr);
+    CHECK(with([](BulbConfig& c) { set_text(c.mqtt_uri, "https://x"); }) != nullptr);
+    CHECK(with([](BulbConfig& c) { set_text(c.mqtt_uri, "mqtt://x"); }) == nullptr);
+    CHECK(with([](BulbConfig& c) { set_text(c.mqtt_password, ""); }) != nullptr);
+    CHECK(with([](BulbConfig& c) { c.led_count = 0; }) != nullptr);
+    CHECK(with([](BulbConfig& c) { c.led_count = 1025; }) != nullptr);
+    CHECK(with([](BulbConfig& c) { c.led_count = 1024; }) == nullptr);
+}
+
+void test_ota_decision() {
+    using enum OtaDecision;
+    CHECK(decide_ota("v2", "v1", "", false) == Install);
+    CHECK(decide_ota("v1", "v2", "", false) == Install);  // going back to an older version is allowed
+    CHECK(decide_ota("v1", "v1", "", false) == UpToDate);
+    CHECK(decide_ota("v2", "v1", "v2", false) == RolledBack);
+    CHECK(decide_ota("v2", "v1", "v2", true) == Install);
+    CHECK(decide_ota("v3", "v1", "v2", false) == Install);
+    CHECK(decide_ota("v1", "v1", "v1", true) == UpToDate);  // force doesn't reinstall what's running
+}
+
+void test_ota_confirm() {
+    using enum ConfirmAction;
+    CHECK(confirm_action(0s, 0s) == Wait);
+    CHECK(confirm_action(29s, 29s) == Wait);
+    CHECK(confirm_action(30s, 40s) == Confirm);
+    CHECK(confirm_action(0s, 299s) == Wait);
+    CHECK(confirm_action(0s, 300s) == RollBack);
+    CHECK(confirm_action(29s, 300s) == RollBack);
+    CHECK(confirm_action(30s, 300s) == Confirm);  // proved itself at the last moment
+}
+
+void test_parse_debug_command() {
+    const auto plain = parse_debug_command(R"({"cmd":"ota"})");
+    CHECK(plain && plain->kind == DebugCommand::Kind::Ota && !plain->force);
+    const auto forced = parse_debug_command(R"({"cmd":"ota","force":true})");
+    CHECK(forced && forced->force);
+    CHECK(!parse_debug_command(R"({"cmd":"ota","force":1})")->force);  // only an explicit true forces
+
+    CHECK(!parse_debug_command(""));
+    CHECK(!parse_debug_command("ota"));
+    CHECK(!parse_debug_command("[]"));
+    CHECK(!parse_debug_command("{}"));
+    CHECK(!parse_debug_command(R"({"cmd":1})"));
+    CHECK(!parse_debug_command(R"({"cmd":"reboot"})"));
+    // A message can't choose where an update comes from: extra fields change nothing.
+    const auto with_url = parse_debug_command(R"({"cmd":"ota","url":"https://evil.example/x.bin"})");
+    CHECK(with_url && !with_url->force);
+}
+
+void test_format_info() {
+    const auto text = [](const DeviceInfo& info) { return std::string{format_info(info).view()}; };
+    CHECK(text({.version = "abc1234", .confirmed = true, .rolled_back = {}, .ota = "idle", .progress = 0}) ==
+          R"({"version":"abc1234","confirmed":true,"rolled_back":null,"ota":"idle","progress":0})");
+    CHECK(text({.version = "v2",
+                .confirmed = false,
+                .rolled_back = "v3",
+                .ota = "downloading",
+                .progress = 40}) ==
+          R"({"version":"v2","confirmed":false,"rolled_back":"v3","ota":"downloading","progress":40})");
+
+    // The longest possible message fits.
+    const std::string longest(31, 'x');
+    const std::string json = text({.version = longest,
+                                   .confirmed = false,
+                                   .rolled_back = longest,
+                                   .ota = "unconfirmed",
+                                   .progress = 100});
+    CHECK(json.ends_with(R"("ota":"unconfirmed","progress":100})"));
+    CHECK(std::string_view{ota_status_name(OtaStatus::Rejected)} == "rejected");
+}
+
 void test_callback() {
     Callback<int(int)> empty;
     CHECK(!empty);
@@ -352,6 +456,11 @@ int main() {
     test_parse_alarm();
     test_format_schedule();
     test_stored_alarm_layout();
+    test_config_validation();
+    test_ota_decision();
+    test_ota_confirm();
+    test_parse_debug_command();
+    test_format_info();
     test_callback();
 
     if (failures > 0) {

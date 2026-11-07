@@ -63,7 +63,7 @@ sudo touch /etc/mosquitto/passwd && sudo chown root:mosquitto /etc/mosquitto/pas
 sudo mosquitto_passwd /etc/mosquitto/passwd app
 
 # One user per bulb: the username must equal the bulb id (the ACL relies on it)
-sudo ./add-bulb.sh living-room      # prints the lines for firmware/sdkconfig.defaults.local
+sudo ./add-bulb.sh living-room      # prints the password for firmware/tools/provision.py
 ```
 
 ## 4. Firewall and start
@@ -118,3 +118,5 @@ The full tree is `pico/bulb/<id>/…`. Payloads follow Home Assistant's MQTT **J
 | `motion` | bulb → all | yes      | `{"motion":true}` / `{"motion":false}` |
 | `schedule_set` | app → bulb | no | Sleep timer and/or alarm: `{"timer":{"after":1800,"fade":60}}` (seconds; a fade of 0 is sudden), `{"timer":null}` to cancel, `{"alarm":{"enabled":true,"hour":7,"minute":0,"days":[1,2,3,4,5],"rise":1800,"brightness":255,"color":{"r":255,"g":180,"b":100}}}`. Alarm fields are optional. Days run from 0 (Sunday) to 6, and an empty list means once |
 | `schedule` | bulb → all | yes | `{"time_synced":true,"timer":{"ends":1800000000,"fade":60},"alarm":{…}}`. `timer` is `null` when none is running, and `ends` is Unix time, or 0 until the bulb's clock is set |
+| `cmd` | app → bulb | no | `{"cmd":"ota"}` checks for and installs new firmware. Add `"force":true` to retry a version that was rolled back. The bulb ignores retained messages here, so a stale one can't repeat |
+| `info` | bulb → all | yes | `{"version":"abc1234","confirmed":true,"rolled_back":null,"ota":"idle","progress":0}`. `ota` is one of `idle`, `checking`, `downloading`, `waiting`, `restarting`, `busy`, `up_to_date`, `rolled_back`, `unconfirmed`, `rejected`, `failed` |

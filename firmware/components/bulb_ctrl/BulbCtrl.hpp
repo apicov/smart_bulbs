@@ -30,6 +30,12 @@ public:
     /** Apply a `schedule_set` command. Returns false if the payload is not valid JSON. */
     bool apply_schedule_json(std::string_view json);
 
+    /** Save the state now rather than after the save delay, before a deliberate restart. */
+    void flush();
+
+    /** True while a sleep timer or a fade it or the alarm started is running. A restart would lose it. */
+    [[nodiscard]] bool schedule_active();
+
     [[nodiscard]] StateJson state_json();
     [[nodiscard]] ScheduleJson schedule_json();
 
@@ -52,13 +58,14 @@ private:
     LightEngine& engine_;
     JsonListener on_state_;
     JsonListener on_schedule_;
-    rtos::Mutex mtx_;  // guards the members up to and including rise_active_
+    rtos::Mutex mtx_;  // guards the members up to and including scheduled_fade_ends_
     LightState state_{};
     Alarm alarm_{};
     bool timer_active_ = false;
     std::chrono::microseconds timer_fade_start_{0};  // on the monotonic esp_timer clock
     uint32_t timer_fade_s_ = 0;
-    bool rise_active_ = false;  // stops one alarm starting twice
+    bool rise_active_ = false;                          // stops one alarm starting twice
+    std::chrono::microseconds scheduled_fade_ends_{0};  // on the same clock. Any newer change ends it
     esp_timer_handle_t save_timer_ = nullptr;
     bool clock_valid_ = false;  // only touched by the schedule task
     rtos::StaticTask<TASK_STACK_BYTES> task_;

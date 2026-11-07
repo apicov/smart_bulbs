@@ -107,6 +107,7 @@ bool BulbCtrl::apply_schedule_json(std::string_view json) {
 BulbCtrl::Applied BulbCtrl::apply_locked(const LightState& next, std::chrono::milliseconds transition) {
     Applied applied;
     applied.changed = next != state_;
+    scheduled_fade_ends_ = std::chrono::microseconds{0};
     state_ = next;
     engine_.set(state_, transition);
     applied.report = format_state(state_);
@@ -125,6 +126,18 @@ void BulbCtrl::finish_apply(const Applied& applied) {
     // Always report back, even if unchanged, so the app can reconcile optimistic UI.
     if (on_state_) on_state_(applied.report.view());
     if (applied.schedule_changed) publish_schedule();
+}
+
+void BulbCtrl::flush() {
+    if (esp_timer_is_active(save_timer_)) {
+        esp_timer_stop(save_timer_);
+        save();
+    }
+}
+
+bool BulbCtrl::schedule_active() {
+    const std::lock_guard lock{mtx_};
+    return timer_active_ || monotonic_now() < scheduled_fade_ends_;
 }
 
 StateJson BulbCtrl::state_json() {
@@ -190,6 +203,7 @@ void BulbCtrl::check_sleep_timer() {
         LightState next = state_;
         next.on = false;
         applied = apply_locked(next, std::chrono::seconds{timer_fade_s_});
+        scheduled_fade_ends_ = monotonic_now() + std::chrono::seconds{timer_fade_s_};
         applied.schedule_changed = true;
     }
     ESP_LOGI(TAG, "Sleep timer: turning off");
@@ -220,6 +234,7 @@ void BulbCtrl::check_alarm() {
         next.color = alarm_.color;
         next.brightness = alarm_.brightness;
         applied = apply_locked(next, std::chrono::seconds{rise_s});
+        scheduled_fade_ends_ = monotonic_now() + std::chrono::seconds{rise_s};
         timer_active_ = false;  // a timer shouldn't switch off the wake-up light
         applied.schedule_changed = true;
         if (alarm_.days == 0) {

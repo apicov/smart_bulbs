@@ -3,4 +3,6 @@ managed_components/
 sdkconfig
 sdkconfig.old
 sdkconfig.defaults.local
+keys/
+releases/
 test.log

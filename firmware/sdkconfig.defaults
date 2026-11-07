@@ -11,3 +11,16 @@ CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
 CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
 
 CONFIG_COMPILER_CXX_EXCEPTIONS=n
+
+# OTA: a new image must prove itself, or the bootloader goes back to the old one.
+# This goes in the bootloader, which OTA can't change, so it has to be there from the start.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Updates must be signed with our key, kept out of git in keys/. Burns no eFuses.
+CONFIG_SECURE_SIGNED_APPS_NO_SECURE_BOOT=y
+CONFIG_SECURE_SIGNED_ON_UPDATE_NO_SECURE_BOOT=y
+CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES=y
+CONFIG_SECURE_BOOT_SIGNING_KEY="keys/signing.pem"
+
+# Keep a crash report in flash, to read later over WiFi.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y

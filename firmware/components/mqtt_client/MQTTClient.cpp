@@ -62,7 +62,7 @@ void MQTTClient::handle(int32_t id, const esp_mqtt_event_t& event) {
         ESP_LOGD(TAG, "Incoming data on %.*s", event.topic_len, event.topic);
         if (on_message_)
             on_message_({event.topic, static_cast<std::size_t>(event.topic_len)},
-                        {event.data, static_cast<std::size_t>(event.data_len)});
+                        {event.data, static_cast<std::size_t>(event.data_len)}, event.retain);
         break;
     case MQTT_EVENT_ERROR:
         if (event.error_handle->error_type == MQTT_ERROR_TYPE_CONNECTION_REFUSED)
