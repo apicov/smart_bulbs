@@ -83,6 +83,32 @@ void test_current_limit() {
     CHECK((to_pixel(target_levels(off), {24, 20, 450}) == Rgb{0, 0, 0}));
 }
 
+void test_rgbw() {
+    CHECK((to_rgbw({255, 255, 255}) == Rgbw{0, 0, 0, 255}));
+    CHECK((to_rgbw({255, 180, 100}) == Rgbw{155, 80, 0, 100}));
+    CHECK((to_rgbw({255, 0, 30}) == Rgbw{255, 0, 30, 0}));
+    CHECK((to_rgbw({0, 0, 0}) == Rgbw{0, 0, 0, 0}));
+}
+
+void test_rgbw_current_limit() {
+    const LightState white{true, {255, 255, 255}, 255};
+    // Full white lights only the white LED: 24 * 20 mA = 480 mA, so 1000 mA doesn't limit it...
+    CHECK((to_pixel(target_levels(white), {24, 20, 1000, true}) == Rgb{255, 255, 255}));
+    // ...and 450 mA allows 93.75% (RGB would allow 31.25%).
+    CHECK((to_pixel(target_levels(white), {24, 20, 450, true}) == Rgb{239, 239, 239}));
+
+    // Pure red has no white part, so it's limited as on RGB.
+    const LightState red{true, {255, 0, 0}, 255};
+    CHECK((to_pixel(target_levels(red), {24, 20, 450, true}) == to_pixel(target_levels(red), {24, 20, 450})));
+
+    // Whatever the colour, the limited RGBW frame stays within budget.
+    for (int c = 0; c < 256; c += 5) {
+        const LightState s{true, {255, static_cast<uint8_t>(c), static_cast<uint8_t>(255 - c)}, 255};
+        const Rgbw p = to_rgbw(to_pixel(target_levels(s), {24, 20, 450, true}));
+        CHECK(24u * 20u * (p.r + p.g + p.b + p.w) <= 450u * 255u);
+    }
+}
+
 void test_fade() {
     const Levels from{0, 65025, 1000};
     const Levels to{65025, 0, 1000};
@@ -497,6 +523,8 @@ int main() {
     test_gamma();
     test_pixel_matches_float_code();
     test_current_limit();
+    test_rgbw();
+    test_rgbw_current_limit();
     test_fade();
     test_parse_state();
     test_parse_brightness();

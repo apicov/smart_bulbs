@@ -24,14 +24,37 @@ config BULB_LED_GPIO
     help
         Avoid strapping pins 4, 5, 8, 9, 15. GPIO8 drives the onboard RGB LED.
 
+choice BULB_LED_TYPE
+    prompt "LED type"
+    default BULB_LED_TYPE_RGBW
+    help
+        RGB: WS2812B and other 3-channel NeoPixels.
+        RGBW: SK6812 RGBW NeoPixels. Whites and pastels use the white LED.
+
+config BULB_LED_TYPE_RGB
+    bool "RGB (WS2812B, GRB order)"
+
+config BULB_LED_TYPE_RGBW
+    bool "RGBW (SK6812, GRBW order)"
+endchoice
+
 config BULB_LED_COUNT
     int "Number of LEDs (tools/provision.py can override this per bulb)"
     range 1 1024
-    default 24
+    default 2
+
+config BULB_MA_PER_CHANNEL
+    int "Current per colour channel at full brightness, in mA"
+    range 1 255
+    default 200
+    help
+        Used to estimate the draw for the current limit. 200 suits a 4 W
+        RGBW LED at 5V (800 mA over 4 channels). A WS2812B or SK6812
+        NeoPixel draws about 20.
 
 config BULB_MAX_MILLIAMPS
     int "Strip current limit in mA, 0 = unlimited (tools/provision.py can override this per bulb)"
-    default 1000
+    default 1800
     help
         Frames are scaled down so the estimated draw stays below this.
         Size it to your 5V supply.

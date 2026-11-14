@@ -8,7 +8,7 @@
 #include "led_strip.h"
 
 /**
- * Renders a LightState onto a WS2812 strip in its own task.
+ * Renders a LightState onto a WS2812 (RGB) or SK6812 (RGBW) strip in its own task.
  *
  * - Transitions fade linearly over time in (pre-gamma) output space.
  * - Gamma 2.2 correction so brightness steps look even.
@@ -16,11 +16,17 @@
  */
 class LightEngine {
 public:
+    enum class LedType : uint8_t {
+        RGB,   ///< WS2812B, GRB order
+        RGBW,  ///< SK6812 RGBW, GRBW order
+    };
+
     struct Config {
         int gpio;
         uint16_t led_count;
         uint32_t max_milliamps;       ///< 0 = no limit
-        uint8_t ma_per_channel = 20;  ///< WS2812: ~20 mA per channel at full duty
+        uint8_t ma_per_channel = 20;  ///< per channel at full duty: ~20 mA for a WS2812
+        LedType led_type = LedType::RGB;
     };
 
     LightEngine() = default;
@@ -43,6 +49,7 @@ private:
 
     PowerBudget power_{};
     uint32_t led_count_ = 0;
+    LedType led_type_ = LedType::RGB;
     led_strip_handle_t strip_ = nullptr;
     bool refresh_failed_ = false;  // only touched by the render task
 

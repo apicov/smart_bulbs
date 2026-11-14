@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -27,6 +28,7 @@ struct PowerBudget {
     uint32_t led_count;
     uint32_t ma_per_channel;
     uint32_t max_milliamps;  ///< 0 = no limit
+    bool rgbw = false;       ///< the strip shows to_rgbw() of the pixel, so whites light one LED, not three
 };
 
 namespace detail {
@@ -78,12 +80,26 @@ constexpr Rgb to_pixel(const Levels& levels, const PowerBudget& power) {
         out[c] = GAMMA[(levels[c] + 127u) / 255u];  // rounds to the nearest 0..255
 
     if (power.max_milliamps > 0) {
+        // On RGBW the shared part min(r,g,b) lights the white LED instead of all three:
+        // (r-w) + (g-w) + (b-w) + w. Scaling keeps the split, so the estimate holds after it.
+        const uint32_t white = power.rgbw ? std::min({out[0], out[1], out[2]}) : 0u;
         // Both sides stay scaled by 255 to keep the sums exact.
         const uint64_t estimate =
-            uint64_t{power.led_count} * power.ma_per_channel * (out[0] + out[1] + out[2]);
+            uint64_t{power.led_count} * power.ma_per_channel * (out[0] + out[1] + out[2] - 2u * white);
         const uint64_t limit = uint64_t{power.max_milliamps} * 255u;
         if (estimate > limit)
             for (auto& v : out) v = static_cast<uint32_t>(v * limit / estimate);
     }
     return {static_cast<uint8_t>(out[0]), static_cast<uint8_t>(out[1]), static_cast<uint8_t>(out[2])};
+}
+
+struct Rgbw {
+    uint8_t r, g, b, w;
+    bool operator==(const Rgbw&) const = default;
+};
+
+/** For RGBW strips: the part all three channels share goes to the white LED instead. */
+constexpr Rgbw to_rgbw(const Rgb& p) {
+    const uint8_t w = std::min({p.r, p.g, p.b});
+    return {static_cast<uint8_t>(p.r - w), static_cast<uint8_t>(p.g - w), static_cast<uint8_t>(p.b - w), w};
 }

@@ -15,14 +15,20 @@ microseconds now() { return microseconds{esp_timer_get_time()}; }
 
 esp_err_t LightEngine::start(const Config& cfg) {
     led_count_ = cfg.led_count;
-    power_ = {
-        .led_count = cfg.led_count, .ma_per_channel = cfg.ma_per_channel, .max_milliamps = cfg.max_milliamps};
+    led_type_ = cfg.led_type;
+    power_ = {.led_count = cfg.led_count,
+              .ma_per_channel = cfg.ma_per_channel,
+              .max_milliamps = cfg.max_milliamps,
+              .rgbw = cfg.led_type == LedType::RGBW};
 
     led_strip_config_t strip_cfg = {};
     strip_cfg.strip_gpio_num = cfg.gpio;
     strip_cfg.max_leds = cfg.led_count;
+    // Kept as WS2812 for SK6812 too: the SPI backend sends the same bit timing for every
+    // model (0.4/0.8 us high), which SK6812s accept, and other models only log a warning.
     strip_cfg.led_model = LED_MODEL_WS2812;
-    strip_cfg.color_component_format = LED_STRIP_COLOR_COMPONENT_FMT_GRB;
+    strip_cfg.color_component_format = cfg.led_type == LedType::RGBW ? LED_STRIP_COLOR_COMPONENT_FMT_GRBW
+                                                                     : LED_STRIP_COLOR_COMPONENT_FMT_GRB;
 
     // SPI with DMA, not RMT: a frame goes out in one transfer, so it's less exposed to
     // WiFi interrupts on this single-core chip. RMT has to refill its 48-symbol buffer
@@ -79,7 +85,12 @@ void LightEngine::render_loop() {
 }
 
 void LightEngine::write_frame(const Rgb& pixel) {
-    for (uint32_t i = 0; i < led_count_; ++i) led_strip_set_pixel(strip_, i, pixel.r, pixel.g, pixel.b);
+    if (led_type_ == LedType::RGBW) {
+        const Rgbw p = to_rgbw(pixel);
+        for (uint32_t i = 0; i < led_count_; ++i) led_strip_set_pixel_rgbw(strip_, i, p.r, p.g, p.b, p.w);
+    } else {
+        for (uint32_t i = 0; i < led_count_; ++i) led_strip_set_pixel(strip_, i, pixel.r, pixel.g, pixel.b);
+    }
     const esp_err_t err = led_strip_refresh(strip_);
     // A stuck strip fails every frame, so report only the first failure.
     if (err != ESP_OK && !refresh_failed_) ESP_LOGE(TAG, "strip refresh failed: %s", esp_err_to_name(err));

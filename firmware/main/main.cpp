@@ -34,6 +34,12 @@ constexpr bool POWER_ON_LIGHT = true;
 constexpr bool POWER_ON_LIGHT = false;
 #endif
 
+#ifdef CONFIG_BULB_LED_TYPE_RGBW
+constexpr LightEngine::LedType LED_TYPE = LightEngine::LedType::RGBW;
+#else
+constexpr LightEngine::LedType LED_TYPE = LightEngine::LedType::RGB;
+#endif
+
 // A bad configuration should fail the build, not misbehave on the device.
 static_assert(CONFIG_BULB_MAX_MILLIAMPS >= 0, "current limit can't be negative");
 
@@ -120,7 +126,9 @@ public:
         ESP_ERROR_CHECK(engine_.start(
             {.gpio = CONFIG_BULB_LED_GPIO,
              .led_count = config_ ? config_->led_count : uint16_t{CONFIG_BULB_LED_COUNT},
-             .max_milliamps = config_ ? config_->max_milliamps : uint32_t{CONFIG_BULB_MAX_MILLIAMPS}}));
+             .max_milliamps = config_ ? config_->max_milliamps : uint32_t{CONFIG_BULB_MAX_MILLIAMPS},
+             .ma_per_channel = CONFIG_BULB_MA_PER_CHANNEL,
+             .led_type = LED_TYPE}));
         // An update or crash shouldn't turn on a light that was off.
         ESP_ERROR_CHECK(ctrl_.start(
             POWER_ON_LIGHT && !restarted_by_firmware(),

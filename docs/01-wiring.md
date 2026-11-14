@@ -5,7 +5,7 @@
 | Part | Notes |
 |------|-------|
 | Waveshare **ESP32-C6-Zero** | USB-C is used for power and flashing |
-| **WS2812B** strip, 24 LEDs | 5V "NeoPixel" strip |
+| 2× 4 W **RGBW** NeoPixel LEDs | Adafruit 5163, 5V, GRBW order |
 | **HC-SR505** mini PIR | Runs on 4.5–20V. Output is HIGH (~3.3V) on motion and holds for ~8 s |
 | 330 Ω resistor | In series with the LED data line |
 | 1000 µF / ≥6.3V capacitor | Across the strip's 5V and GND |
@@ -43,8 +43,9 @@
 
 ## Rules of thumb
 
-- **Power.** Each LED draws up to ~60 mA at full white, so 24 LEDs can draw ~1.4 A. A laptop USB port gives about 500 mA, so on the bench cap the strip at **450 mA** with `tools/provision.py --max-ma 450`. For a real lamp, feed the strip from its own 5V supply, connect all the GNDs together, and raise the cap to match the supply.
+- **Power.** A 4 W LED draws ~800 mA at 5V with all four channels on, ~200 mA per channel. The firmware lights whites with the white LED alone, so the most an LED draws is ~400 mA, for colours like yellow that use two full channels. Two LEDs can draw ~800 mA. The default cap of 1800 mA suits a 2 A supply. For other LEDs, set the per-channel current in `idf.py menuconfig` (~20 mA for a WS2812B). A laptop USB port gives about 500 mA, so on the bench cap the strip at **450 mA** with `tools/provision.py --max-ma 450`. For a real lamp, feed the strip from its own 5V supply, connect all the GNDs together, and raise the cap to match the supply.
 - **Data level.** The C6 outputs 3.3V, while WS2812 strips officially expect about 3.5V at 5V supply. Short wires usually work without a level shifter. If the first LED flickers or shows wrong colours, add a 74AHCT125 between GP18 and DIN.
 - **Avoid these pins:** GP8 (the onboard RGB LED), GP9 and GP15 (they decide the boot mode), and GP12/GP13 (USB).
 - **PIR placement.** Keep the PIR away from the board's antenna and from the LEDs. WiFi transmissions and heat can both cause false triggers. After power-up, the sensor needs 10–60 s to settle.
 - To use **other pins**, run `idf.py menuconfig` and open "Pico Bulb". For a **different LED count**, use `tools/provision.py --led-count`.
+- The firmware expects **RGBW NeoPixels** (SK6812 RGBW) by default. For an RGB strip such as the WS2812B, set "LED type" to RGB under "Pico Bulb" in `idf.py menuconfig`, or its colours come out wrong.
