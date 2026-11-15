@@ -1,0 +1,7 @@
+# Only the S3 node has a camera so far. The rule stops other chips' builds from
+# downloading a driver they never compile: add a target to use it there.
+dependencies:
+  espressif/esp32-camera:
+    version: "^2.1.9"
+    rules:
+      - if: "target in [esp32s3]"

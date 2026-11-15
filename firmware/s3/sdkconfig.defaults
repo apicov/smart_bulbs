@@ -37,3 +37,8 @@ CONFIG_SECURE_BOOT_SIGNING_KEY="../keys/signing.pem"
 
 # Keep a crash report in flash, to read later over WiFi.
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+
+# Camera: SCCB on I2C port 1 with the new I2C driver, so it can't clash with the
+# sensors on port 0. Mixing the old and new I2C drivers aborts at boot.
+CONFIG_SCCB_HARDWARE_I2C_DRIVER_NEW=y
+CONFIG_SCCB_HARDWARE_I2C_PORT1=y

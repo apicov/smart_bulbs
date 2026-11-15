@@ -37,6 +37,6 @@ direct_dependencies:
 - espressif/cjson
 - espressif/led_strip
 - espressif/mqtt
-manifest_hash: 7eace1c308ef3364cebae374575f0c2aa15029026850bf5b24b6184fe6c63824
+manifest_hash: b6e548ba5baf9d9d62f1542abf742c2ebcafeb6ffb6b50616b9464a4a3a9ede1
 target: esp32c6
 version: 3.0.0
