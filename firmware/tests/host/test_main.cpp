@@ -13,6 +13,7 @@
 #include "Callback.hpp"
 #include "LightModel.hpp"
 #include "OtaPolicy.hpp"
+#include "SensorReport.hpp"
 
 using namespace std::chrono_literals;
 
@@ -520,6 +521,38 @@ void test_callback() {
     Callback<int(int)> plain = +[](int x) { return x * 2; };
     CHECK(plain(4) == 8);
 }
+void test_format_sensors() {
+    const auto text = [](const SensorReadings& r, std::string_view camera = {}) {
+        return std::string{format_sensors(r, camera).view()};
+    };
+    CHECK(text({}) == "{}");
+
+    const SensorReadings all{.veml7700_lux = 123.44F,
+                             .tsl2591_lux = 118.0F,
+                             .vl53l1x = Distance{.valid = true, .mm = 530},
+                             .scd30 = AirReading{.co2_ppm = 612.4F, .temp_c = 22.44F, .humidity_pct = 41.0F}};
+    CHECK(text(all, "ok") == R"({"veml7700":{"lux":123.4},"tsl2591":{"lux":118.0},"vl53l1x":{"mm":530},)"
+                             R"("scd30":{"co2":612,"temp":22.4,"rh":41.0},"camera":"ok"})");
+
+    // Missing sensors are left out, and the commas still come out right.
+    CHECK(text({.tsl2591_lux = 5.0F}) == R"({"tsl2591":{"lux":5.0}})");
+    CHECK(text({.vl53l1x = Distance{.valid = false, .mm = 8191}}, "no camera") ==
+          R"({"vl53l1x":{"mm":null},"camera":"no camera"})");
+
+    // Readings no sensor could make are left out, which also bounds the length.
+    CHECK(text({.veml7700_lux = NAN, .tsl2591_lux = -1.0F}) == "{}");
+    CHECK(text({.scd30 = AirReading{.co2_ppm = 1e30F, .temp_c = 20.0F, .humidity_pct = 50.0F}}) == "{}");
+
+    // The longest possible message fits.
+    const SensorReadings longest{
+        .veml7700_lux = 199999.9F,
+        .tsl2591_lux = 199999.9F,
+        .vl53l1x = Distance{.valid = true, .mm = 65535},
+        .scd30 = AirReading{.co2_ppm = 40000.0F, .temp_c = -39.9F, .humidity_pct = 100.0F}};
+    const std::string json = text(longest, std::string(40, 'c'));
+    CHECK(json.ends_with(R"("camera":")" + std::string(32, 'c') + R"("})"));  // cut to 32
+    CHECK(json.starts_with(R"({"veml7700":{"lux":199999.9},)"));
+}
 }  // namespace
 
 int main() {
@@ -546,6 +579,7 @@ int main() {
     test_ota_confirm();
     test_parse_debug_command();
     test_format_info();
+    test_format_sensors();
     test_callback();
 
     if (failures > 0) {

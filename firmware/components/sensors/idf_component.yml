@@ -1,0 +1,25 @@
+# Only the S3 node has these sensors so far. The rules stop other chips' builds
+# from downloading drivers they never compile: add a target to use them there.
+dependencies:
+  # Maintained drivers on the new i2c_master API. i2cdev owns the bus.
+  esp-idf-lib/i2cdev:
+    version: "^2.2.0"
+    rules:
+      - if: "target in [esp32s3]"
+  esp-idf-lib/veml7700:
+    version: "^1.0.9"
+    rules:
+      - if: "target in [esp32s3]"
+  esp-idf-lib/tsl2591:
+    version: "^1.0.9"
+    rules:
+      - if: "target in [esp32s3]"
+  esp-idf-lib/scd30:
+    version: "^1.0.13"
+    rules:
+      - if: "target in [esp32s3]"
+  # ST's VL53L1X ULP API ported to the new driver; takes i2cdev's bus handle.
+  grrtzm/vl53l1x_library:
+    version: "^0.3.1"
+    rules:
+      - if: "target in [esp32s3]"

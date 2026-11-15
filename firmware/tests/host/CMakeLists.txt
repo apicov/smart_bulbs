@@ -19,12 +19,14 @@ endif()
 add_executable(host_tests
     test_main.cpp
     ${FIRMWARE}/components/bulb_ctrl/BulbProtocol.cpp
+    ${FIRMWARE}/components/sensors/SensorReport.cpp
     ${CJSON}/cJSON.c)
 target_include_directories(host_tests PRIVATE
     ${FIRMWARE}/components/bulb_config
     ${FIRMWARE}/components/bulb_ctrl
     ${FIRMWARE}/components/light_engine
     ${FIRMWARE}/components/ota_updater
+    ${FIRMWARE}/components/sensors
     ${FIRMWARE}/components/support
     ${CJSON})
 # Trap mode needs no sanitizer runtime library to be installed.

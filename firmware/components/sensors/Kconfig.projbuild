@@ -1,0 +1,30 @@
+menu "Pico Node sensors"
+
+config NODE_I2C_SDA_GPIO
+    int "I2C SDA GPIO"
+    default 5
+    help
+        XIAO ESP32-S3: GPIO5 is pad D4.
+
+config NODE_I2C_SCL_GPIO
+    int "I2C SCL GPIO"
+    default 6
+    help
+        XIAO ESP32-S3: GPIO6 is pad D5.
+
+config NODE_VL53L1X_XSHUT_GPIO
+    int "VL53L1X XSHUT GPIO (-1 = no VL53L1X)"
+    default 4
+    help
+        The VL53L1X and the TSL2591 both start at address 0x29. The firmware holds
+        the VL53L1X in reset with this pin, then moves it to another address.
+        XIAO ESP32-S3: GPIO4 is pad D3.
+
+config NODE_SENSOR_PERIOD_S
+    int "Seconds between sensor reports"
+    range 2 1800
+    default 30
+    help
+        Also the SCD30's measurement interval.
+
+endmenu

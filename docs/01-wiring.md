@@ -1,5 +1,7 @@
 # 1. Hardware & wiring
 
+This covers the ESP32-C6-Zero bulb. The XIAO ESP32-S3 Sense node, with a 12 V strip and I2C sensors, is [further down](#xiao-esp32-s3-sense-node).
+
 ## Parts (one bulb)
 
 | Part | Notes |
@@ -49,3 +51,34 @@
 - **PIR placement.** Keep the PIR away from the board's antenna and from the LEDs. WiFi transmissions and heat can both cause false triggers. After power-up, the sensor needs 10–60 s to settle.
 - To use **other pins**, run `idf.py menuconfig` and open "Pico Bulb". For a **different LED count**, use `tools/provision.py --led-count`.
 - The firmware expects **RGBW NeoPixels** (SK6812 RGBW) by default. For an RGB strip such as the WS2812B, set "LED type" to RGB under "Pico Bulb" in `idf.py menuconfig`, or its colours come out wrong.
+
+## XIAO ESP32-S3 Sense node
+
+The `firmware/s3` project. It's a bulb like the C6 one, plus I2C sensors and the Sense board's camera.
+
+| Part | Notes |
+|------|-------|
+| Seeed **XIAO ESP32-S3 Sense** | 8 MB flash, 8 MB PSRAM, camera on its expansion board |
+| **WS2811** 12 V strip | One chip per 3 LEDs, wired BRG, as in the dancefloor project |
+| 12 V supply | For the strip only. Share its GND with the XIAO |
+| 74AHCT125, 330 Ω | Lifts the 3.3V data to 5V for the strip, powered from 5V |
+| **HC-SR505** mini PIR | As on the C6 bulb |
+| VEML7700, TSL2591, VL53L1X, SCD30 | I2C breakouts, powered from 3V3 |
+
+| Pad | GPIO | Connects to |
+|-----|------|-------------|
+| D0 | 1 | 74AHCT125 in; its out → 330 Ω → strip **DIN** |
+| D1 | 2 | PIR **OUT** |
+| D3 | 4 | VL53L1X **XSHUT** |
+| D4 | 5 | I2C **SDA**, all four sensors |
+| D5 | 6 | I2C **SCL**, all four sensors |
+| 3V3, GND | | Sensors' power. GND also to the PIR, the level shifter and the 12 V supply's GND |
+| 5V | | PIR + and the level shifter's VCC |
+
+- **Same address.** The TSL2591 and VL53L1X both start at I2C address 0x29. The firmware holds the VL53L1X in reset with XSHUT, then moves it to 0x30 before the TSL2591 starts. Without the XSHUT wire it leaves the VL53L1X out.
+- **Pull-ups.** Most breakouts have their own I2C pull-ups. The firmware also turns on the chip's weak ones, which are enough only for short wires.
+- **Never feed 12 V to the XIAO.** It runs from USB or 5V. The strip's 12 V only meets the XIAO at GND.
+- **LED count.** For WS2811, set it to the number of chips, which is the LEDs ÷ 3, with `tools/provision.py --project s3 --led-count`. The default is 30.
+- **First flash.** Set pure red, green and blue from the app and check the strip shows the same. If two are swapped, the strip is wired in a different order than the dancefloor one.
+- **Current limit.** It's off on this node. Set one with `--max-ma` once you know the supply.
+- To use **other pins**, run `idf.py menuconfig` in `firmware/s3` and open "Pico Bulb" and "Pico Node sensors".
