@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Write a bulb's identity and secrets to its `bulbcfg` flash partition, over USB.
 
-Run from an activated ESP-IDF shell:
+Run from firmware/ in an activated ESP-IDF shell:
 
-    python tools/provision.py --id living-room --wifi-ssid my-wifi \
+    python tools/provision.py [--project s3] --id living-room --wifi-ssid my-wifi \
         --mqtt-uri mqtts://mqtt.example.com:8883 [--max-ma 450] [--led-count 24] [--port /dev/ttyACM0]
 
 Passwords are prompted for, so they stay out of your shell history. To reuse
@@ -22,8 +22,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-# Must match partitions.csv.
-PARTITION_OFFSET = "0x3E0000"
+from projects import add_project_argument, project_from
+
+PARTITION_NAME = "bulbcfg"  # its offset comes from the project's partitions.csv
 PARTITION_SIZE = "0x6000"
 NAMESPACE = "bulb"
 
@@ -102,7 +103,9 @@ def main() -> int:
     parser.add_argument("--led-count", type=int, help="number of LEDs (default: the firmware's)")
     parser.add_argument("--port", help="serial port (default: found automatically)")
     parser.add_argument("--output", type=Path, help="save the image to this file instead of flashing it")
+    add_project_argument(parser)
     args = parser.parse_args()
+    project = project_from(args)
 
     if "IDF_PATH" not in os.environ:
         print("Activate ESP-IDF first: IDF_PATH isn't set.", file=sys.stderr)
@@ -130,10 +133,10 @@ def main() -> int:
             print(f"Saved to {args.output}. It holds the bulb's passwords, so delete it when you're done.")
             return 0
 
-        command = [sys.executable, "-m", "esptool", "--chip", "esp32c6"]
+        command = [sys.executable, "-m", "esptool", "--chip", project.chip]
         if args.port:
             command += ["--port", args.port]
-        command += ["write-flash", PARTITION_OFFSET, str(image)]
+        command += ["write-flash", project.partition_offset(PARTITION_NAME), str(image)]
         subprocess.run(command, check=True)
 
     print(f"Provisioned {values['id']}. It uses these settings from its next boot.")

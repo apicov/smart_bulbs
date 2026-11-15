@@ -19,4 +19,4 @@ Checks: >
   -readability-braces-around-statements,
   -readability-implicit-bool-conversion,
   -readability-function-cognitive-complexity
-HeaderFilterRegex: 'firmware/(components|main)/'
+HeaderFilterRegex: 'firmware/(components|c6/main|s3/main)/'

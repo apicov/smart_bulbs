@@ -4,7 +4,7 @@ Setting up a new bulb needs USB, and the sections below go in order. Once a bulb
 
 ## One-time: ESP-IDF 6.0
 
-The firmware needs ESP-IDF v6.0 with the RISC-V toolchain. Install it with Espressif's installer (`eim`). In every new shell, activate it first:
+The firmware needs ESP-IDF v6.0 with the RISC-V toolchain for the C6 and the Xtensa one for the S3. Install it with Espressif's installer (`eim`). In every new shell, activate it first:
 
 ```sh
 source ~/.espressif/tools/activate_idf_v6.0.1.sh
@@ -21,12 +21,16 @@ mkdir -p keys
 python -m espsecure generate-signing-key --version 2 --scheme rsa3072 keys/signing.pem
 ```
 
-Git ignores `keys/`. **Back this file up somewhere safe and private.** If you lose it, every bulb needs USB before it can take another update. If someone else gets it, they can sign firmware your bulbs will accept.
+Git ignores `keys/`. Both chips' firmware is signed with this one key. **Back this file up somewhere safe and private.** If you lose it, every bulb needs USB before it can take another update. If someone else gets it, they can sign firmware your bulbs will accept.
 
 ## Build and flash
 
+Each chip has its own project under `firmware/`: `c6/` for the ESP32-C6-Zero bulb and `s3/` for the XIAO ESP32-S3 Sense node. They share `components/` and `tools/`. Build in the project's folder:
+
 ```sh
+cd c6                 # or s3
 idf.py build flash    # run `rm -f sdkconfig` first if you've pulled new sdkconfig.defaults settings
+cd ..                 # the tools below run from firmware/
 ```
 
 If the serial port isn't found, hold **BOOT**, tap **RESET**, then run the command again.
@@ -37,7 +41,7 @@ The firmware image holds no passwords, so every bulb can run the same one. Each 
 
 ```sh
 python tools/provision.py --id living-room --wifi-ssid my-wifi --mqtt-uri mqtts://mqtt.apicov.xyz:8883 --max-ma 450
-idf.py monitor        # Ctrl+] to leave the monitor
+(cd c6 && idf.py monitor)   # Ctrl+] to leave the monitor
 ```
 
 It asks for the WiFi and MQTT passwords, so they stay out of your shell history.
@@ -45,11 +49,12 @@ It asks for the WiFi and MQTT passwords, so they stay out of your shell history.
 | Option | Value |
 |-----|-------|
 | `--id` | Bulb id, e.g. `living-room`. Must match its MQTT username |
-| `--wifi-ssid` | A **2.4 GHz** network (the C6 has no 5 GHz) |
+| `--wifi-ssid` | A **2.4 GHz** network (neither chip has 5 GHz) |
 | `--mqtt-uri` | `mqtts://mqtt.apicov.xyz:8883` |
 | `--max-ma` | Optional. `450` when powered over USB; see [wiring](01-wiring.md) |
 | `--led-count` | Optional, if the bulb doesn't have 3 LEDs |
 | `--port` | Optional, if the serial port isn't found automatically |
+| `--project` | `s3` for the XIAO ESP32-S3 node. Default `c6` |
 
 To change a setting, run it again with all the values. Saved colours and alarms aren't touched. A bulb with no settings still works as a plain lamp and logs `Not provisioned`.
 
@@ -58,7 +63,7 @@ To change a setting, run it again with all the values. Saved colours and alarms 
 If you still have a `sdkconfig.defaults.local` from an earlier version, this copies its settings across, after which you can delete the file:
 
 ```sh
-python tools/provision.py --from sdkconfig.defaults.local
+python tools/provision.py --from c6/sdkconfig.defaults.local
 ```
 
 ## What a healthy boot looks like
@@ -111,11 +116,11 @@ Bulbs running this firmware can update without a cable. Changes to the partition
 
 ```sh
 cd firmware
-idf.py reconfigure build             # plain `build` can keep the old version number
-python tools/publish_firmware.py     # --server <login> if you don't use tsp@mqtt.apicov.xyz
+(cd c6 && idf.py reconfigure build)            # plain `build` can keep the old version number
+python tools/publish_firmware.py --project c6  # --server <login> if you don't use tsp@mqtt.apicov.xyz
 ```
 
-This changes nothing on any bulb. It keeps the `.bin` and `.elf` in `releases/<version>/`, which git ignores.
+This changes nothing on any bulb. It keeps the `.bin` and `.elf` in `releases/<project>/<version>/`, which git ignores. Each chip downloads its own file, `pico-bulb.bin` for the C6 and `pico-bulb-s3.bin` for the S3, so publish each project you changed.
 
 **2. Watch and update one bulb.** Check it before updating the rest. `H`, `CA` and `P` are set as in [Test without the app](#test-without-the-app).
 
@@ -179,7 +184,7 @@ python tools/fetch_coredump.py living-room           # prints the crash report; 
 python tools/fetch_coredump.py living-room --erase   # the same, then clears it from the bulb
 ```
 
-It needs the `.elf` of the firmware that crashed. It finds this in `releases/` for anything you published, and `--elf <file>` covers a build flashed over USB. The dump stays on the bulb until you erase it, and a new crash replaces it.
+It needs the `.elf` of the firmware that crashed. It finds this in `releases/` for anything you published, and reads the chip from the bulb's `info`, and `--elf <file>` covers a build flashed over USB. The dump stays on the bulb until you erase it, and a new crash replaces it.
 
 A core dump holds the contents of the bulb's task stacks, which can include its passwords. The tool saves it as a private file in `releases/`, which git ignores. Delete it when you're done, and don't share it. Anyone with the `app` password can read logs and dumps, as well as control the bulbs.
 
@@ -197,7 +202,7 @@ Once it's sealed, the bulb's settings, partition table and bootloader can only c
 
 ## Test without a board
 
-The fade, gamma, current-limit and JSON logic has no ESP-IDF dependency, so its unit tests run on your PC. They need `g++` with C++23 support and CMake, and cJSON from `managed_components`, which appears after your first `idf.py build`. Run them in a shell where ESP-IDF is **not** activated, because its tools on `PATH` break the host compiler.
+The fade, gamma, current-limit and JSON logic has no ESP-IDF dependency, so its unit tests run on your PC. They need `g++` with C++23 support and CMake, and cJSON from `managed_components`, which appears after your first `idf.py build` in `c6/` or `s3/`. Run them in a shell where ESP-IDF is **not** activated, because its tools on `PATH` break the host compiler.
 
 ```sh
 cd firmware
@@ -208,10 +213,10 @@ ctest --test-dir tests/host/build --output-on-failure
 
 ## Check the code style
 
-After `idf.py build`, this runs `clang-format` and `clang-tidy` on the firmware's own code. Both tools come with ESP-IDF. It exits non-zero if either reports a problem, and `--fix-format` reformats the files for you.
+After `idf.py build` in a project, this runs `clang-format` on all the firmware's own code and `clang-tidy` on what that project builds. Both tools come with ESP-IDF. It exits non-zero if either reports a problem, and `--fix-format` reformats the files for you.
 
 ```sh
-python tools/lint.py
+python tools/lint.py --project c6    # and --project s3 after building s3/
 ```
 
 ## Troubleshooting

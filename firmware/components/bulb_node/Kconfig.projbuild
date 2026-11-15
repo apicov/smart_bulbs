@@ -6,10 +6,12 @@ config BULB_TOPIC_PREFIX
 
 config BULB_OTA_URL
     string "Firmware image URL"
+    default "https://mqtt.apicov.xyz/firmware/pico-bulb-s3.bin" if IDF_TARGET_ESP32S3
     default "https://mqtt.apicov.xyz/firmware/pico-bulb.bin"
     help
         Where updates are downloaded from, verified with the built-in CA bundle.
         It's compiled in, so an MQTT message can't point a bulb somewhere else.
+        Each chip has its own image, so the C6 and S3 builds use different files.
 
 config BULB_TIMEZONE
     string "Timezone (POSIX TZ string)"
@@ -20,47 +22,62 @@ config BULB_TIMEZONE
 
 config BULB_LED_GPIO
     int "LED strip data GPIO"
+    default 1 if IDF_TARGET_ESP32S3
     default 18
     help
-        Avoid strapping pins 4, 5, 8, 9, 15. GPIO8 drives the onboard RGB LED.
+        ESP32-C6: avoid strapping pins 4, 5, 8, 9, 15. GPIO8 drives the onboard RGB LED.
+        XIAO ESP32-S3 Sense: GPIO1 is pad D0. Avoid 0, 3, 45, 46 (strapping)
+        and the camera's pins.
 
 choice BULB_LED_TYPE
     prompt "LED type"
+    default BULB_LED_TYPE_WS2811 if IDF_TARGET_ESP32S3
     default BULB_LED_TYPE_RGBW
     help
         RGB: WS2812B and other 3-channel NeoPixels.
         RGBW: SK6812 RGBW NeoPixels. Whites and pastels use the white LED.
+        WS2811: 12 V strips with one chip per 3 LEDs, wired BRG. Getting this
+        wrong swaps colours rather than failing.
 
 config BULB_LED_TYPE_RGB
     bool "RGB (WS2812B, GRB order)"
 
 config BULB_LED_TYPE_RGBW
     bool "RGBW (RGBW order, e.g. Adafruit 5163)"
+
+config BULB_LED_TYPE_WS2811
+    bool "WS2811 12 V (BRG order)"
 endchoice
 
 config BULB_LED_COUNT
     int "Number of LEDs (tools/provision.py can override this per bulb)"
     range 1 1024
+    default 30 if IDF_TARGET_ESP32S3
     default 3
+    help
+        For WS2811 strips, count chips, not LEDs: one chip drives 3 LEDs.
 
 config BULB_MA_PER_CHANNEL
     int "Current per colour channel at full brightness, in mA"
     range 1 255
+    default 20 if IDF_TARGET_ESP32S3
     default 200
     help
         Used to estimate the draw for the current limit. 200 suits a 4 W
         RGBW LED at 5V (800 mA over 4 channels). A WS2812B or SK6812
-        NeoPixel draws about 20.
+        NeoPixel draws about 20, and so does a WS2811 chip's 3-LED segment.
 
 config BULB_MAX_MILLIAMPS
     int "Strip current limit in mA, 0 = unlimited (tools/provision.py can override this per bulb)"
+    default 0 if IDF_TARGET_ESP32S3
     default 1800
     help
         Frames are scaled down so the estimated draw stays below this.
-        Size it to your 5V supply.
+        Size it to your LED supply.
 
 config BULB_PIR_GPIO
     int "PIR sensor GPIO (-1 = no sensor)"
+    default 2 if IDF_TARGET_ESP32S3
     default 19
 
 config BULB_POWER_ON_LIGHT

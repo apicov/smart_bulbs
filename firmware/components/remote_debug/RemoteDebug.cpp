@@ -118,9 +118,15 @@ void RemoteDebug::load_crash() {
     copy_safe(crash_.elf, reinterpret_cast<const char*>(summary.app_elf_sha256),
               sizeof summary.app_elf_sha256);
     crash_.pc = summary.exc_pc;
+#if CONFIG_IDF_TARGET_ARCH_RISCV
     crash_.ra = summary.ex_info.ra;
     crash_.cause = summary.ex_info.mcause;
     crash_.value = summary.ex_info.mtval;
+#else  // Xtensa: a0 holds the return address (its top 2 bits are the register window)
+    crash_.ra = summary.ex_info.exc_a[0];
+    crash_.cause = summary.ex_info.exc_cause;
+    crash_.value = summary.ex_info.exc_vaddr;
+#endif
     has_crash_.store(true);
     ESP_LOGW(TAG, "A crash is saved: task %s, pc 0x%08lx", crash_.task.data(),
              static_cast<unsigned long>(crash_.pc));

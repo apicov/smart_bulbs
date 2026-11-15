@@ -11,6 +11,27 @@ using std::chrono::microseconds;
 
 namespace {
 microseconds now() { return microseconds{esp_timer_get_time()}; }
+
+/** Byte order on the wire. led_strip has no BRG macro, so that one is spelled out. */
+led_color_component_format_t wire_format(LightEngine::LedType type) {
+    switch (type) {
+    case LightEngine::LedType::RGBW:
+        return LED_STRIP_COLOR_COMPONENT_FMT_RGBW;
+    case LightEngine::LedType::WS2811: {
+        led_color_component_format_t brg{};
+        brg.format.b_pos = 0;  // OUT1 drives blue,
+        brg.format.r_pos = 1;  // OUT2 red,
+        brg.format.g_pos = 2;  // OUT3 green
+        brg.format.w_pos = 3;  // unused, but must differ from the others
+        brg.format.bytes_per_color = 1;
+        brg.format.num_components = 3;
+        return brg;
+    }
+    case LightEngine::LedType::RGB:
+        break;
+    }
+    return LED_STRIP_COLOR_COMPONENT_FMT_GRB;
+}
 }  // namespace
 
 esp_err_t LightEngine::start(const Config& cfg) {
@@ -24,14 +45,13 @@ esp_err_t LightEngine::start(const Config& cfg) {
     led_strip_config_t strip_cfg = {};
     strip_cfg.strip_gpio_num = cfg.gpio;
     strip_cfg.max_leds = cfg.led_count;
-    // Kept as WS2812 for SK6812 too: the SPI backend sends the same bit timing for every
-    // model (0.4/0.8 us high), which SK6812s accept, and other models only log a warning.
+    // Kept as WS2812 for SK6812 and WS2811 too: the SPI backend sends the same bit timing
+    // for every model (0.4/0.8 us high), which both accept, and other models only log a warning.
     strip_cfg.led_model = LED_MODEL_WS2812;
-    strip_cfg.color_component_format = cfg.led_type == LedType::RGBW ? LED_STRIP_COLOR_COMPONENT_FMT_RGBW
-                                                                     : LED_STRIP_COLOR_COMPONENT_FMT_GRB;
+    strip_cfg.color_component_format = wire_format(cfg.led_type);
 
     // SPI with DMA, not RMT: a frame goes out in one transfer, so it's less exposed to
-    // WiFi interrupts on this single-core chip. RMT has to refill its 48-symbol buffer
+    // WiFi interrupts, which matters most on the single-core C6. RMT has to refill its symbol buffer
     // from an interrupt throughout the frame, and led_strip enables and disables the
     // channel around each frame, which has wedged under radio load on other chips.
     led_strip_spi_config_t spi_cfg = {};

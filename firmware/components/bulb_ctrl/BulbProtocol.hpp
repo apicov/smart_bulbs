@@ -29,8 +29,8 @@
 // Maintenance, on their own topics:
 //   cmd:  {"cmd":"ota"}, or {"cmd":"ota","force":true} to retry a version that was rolled back
 //         {"cmd":"logs","on":true|false}, {"cmd":"coredump"}, {"cmd":"coredump_erase"}
-//   info: {"version":"abc1234","reset":"power_on","uptime":60,"confirmed":true,"rolled_back":null,
-//          "ota":"idle","progress":0,"logs":false,"heap_min":120000,
+//   info: {"version":"abc1234","chip":"esp32c6","reset":"power_on","uptime":60,"confirmed":true,
+//          "rolled_back":null,"ota":"idle","progress":0,"logs":false,"heap_min":120000,
 //          "stack":{"light":3500,"pir":2800,"schedule":3000,"ota":7500,"debug":4000},
 //          "crash":{"task":"main","pc":"0x42001234","ra":"0x42001200","cause":2,"value":0,"elf":"760585b2"}}
 //         "crash" is null when none is saved.
@@ -120,6 +120,7 @@ struct TaskStacks {
 /** What's reported on `info`. */
 struct DeviceInfo {
     std::string_view version;
+    const char* chip;   ///< CONFIG_IDF_TARGET, e.g. "esp32c6".
     const char* reset;  ///< A fixed name for why the bulb last started.
     uint32_t uptime_s;
     bool confirmed;                ///< False until a new image has proved itself.

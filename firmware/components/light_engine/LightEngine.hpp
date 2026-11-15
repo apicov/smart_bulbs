@@ -17,8 +17,9 @@
 class LightEngine {
 public:
     enum class LedType : uint8_t {
-        RGB,   ///< WS2812B, GRB order
-        RGBW,  ///< RGBW order, e.g. Adafruit 5163
+        RGB,     ///< WS2812B, GRB order
+        RGBW,    ///< RGBW order, e.g. Adafruit 5163
+        WS2811,  ///< 12 V strips, BRG order as the dancefloor strip is wired
     };
 
     struct Config {

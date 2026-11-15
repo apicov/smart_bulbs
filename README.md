@@ -6,7 +6,7 @@ DIY smart bulbs: an **ESP32-C6-Zero** drives a NeoPixel strip and reads a PIR se
 
 | Folder      | What |
 |-------------|------|
-| `firmware/` | ESP-IDF 6.0 project for the bulb: light engine (fades, gamma, current limit), PIR sensor, MQTT over TLS, state saved in NVS, signed updates and debugging over WiFi |
+| `firmware/` | ESP-IDF 6.0 firmware, one project per chip sharing `components/` and `tools/`: `c6/` is the ESP32-C6 bulb, `s3/` the XIAO ESP32-S3 Sense node. Light engine (fades, gamma, current limit), PIR sensor, MQTT over TLS, state saved in NVS, signed updates and debugging over WiFi |
 | `broker/`   | Mosquitto config, ACL and `setup-server.sh` for the Fedora server, which also hosts firmware updates; `dev/` runs a local test broker |
 | `app/`      | Capacitor + React + MUI control app (web and Android): bulb list, power, brightness, palette, colour picker |
 | `docs/`     | Step-by-step setup guide and wiring |
@@ -19,20 +19,21 @@ DIY smart bulbs: an **ESP32-C6-Zero** drives a NeoPixel strip and reads a PIR se
 
 ```sh
 cd firmware
-idf.py set-target esp32c6
 python -m espsecure generate-signing-key --version 2 --scheme rsa3072 keys/signing.pem   # once; back it up
-idf.py build flash
+(cd c6 && idf.py set-target esp32c6 && idf.py build flash)
 python tools/provision.py --id living-room --wifi-ssid my-wifi --mqtt-uri mqtts://mqtt.example.com:8883
-idf.py monitor
+(cd c6 && idf.py monitor)
 ```
+
+For the XIAO ESP32-S3 Sense node, use `s3` and `esp32s3` instead, and add `--project s3` to the tools.
 
 Create `firmware/keys/` first if it doesn't exist. See [docs/03-firmware.md](docs/03-firmware.md) for the details.
 
 To update a bulb after that, with no cable (commit your changes first):
 
 ```sh
-idf.py reconfigure build
-python tools/publish_firmware.py
+(cd c6 && idf.py reconfigure build)
+python tools/publish_firmware.py --project c6
 mosquitto_pub … -t pico/bulb/living-room/cmd -m '{"cmd":"ota"}'
 ```
 

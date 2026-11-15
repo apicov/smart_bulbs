@@ -235,11 +235,11 @@ esac
 # ---------------------------------------------------------------- summary
 step "Done"
 echo "    Bulbs: mqtts://$DOMAIN:8883      App: wss://$DOMAIN:8084"
-echo "    Firmware: https://$DOMAIN/firmware/pico-bulb.bin"
+echo "    Firmware: https://$DOMAIN/firmware/pico-bulb.bin (C6), pico-bulb-s3.bin (S3)"
 if ((${#NEW_CREDS[@]})); then
   echo "    New credentials (also saved in $CREDS):"
   printf '      %s\n' "${NEW_CREDS[@]}"
   echo "    For each bulb, run from firmware/ on your PC and enter its password when asked:"
-  echo "      python tools/provision.py --id <user> --wifi-ssid <network> --mqtt-uri mqtts://$DOMAIN:8883"
+  echo "      python tools/provision.py [--project s3] --id <user> --wifi-ssid <network> --mqtt-uri mqtts://$DOMAIN:8883"
 fi
 echo "    All MQTT passwords created so far: sudo cat $CREDS"

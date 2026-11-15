@@ -6,3 +6,4 @@ sdkconfig.defaults.local
 keys/
 releases/
 test.log
+__pycache__/

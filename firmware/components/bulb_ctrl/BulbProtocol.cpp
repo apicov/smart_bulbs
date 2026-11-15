@@ -190,8 +190,8 @@ InfoJson format_info(const DeviceInfo& info) {
     InfoJson out;
     const int n = std::snprintf(
         out.buf_.data(), out.buf_.size(),
-        R"({"version":"%.*s","reset":"%s","uptime":%lu,"confirmed":%s,"rolled_back":%s,"ota":"%s","progress":%u,"logs":%s,"heap_min":%lu,"stack":{"light":%u,"pir":%u,"schedule":%u,"ota":%u,"debug":%u},"crash":%s})",
-        static_cast<int>(version.size()), version.data(), info.reset,
+        R"({"version":"%.*s","chip":"%s","reset":"%s","uptime":%lu,"confirmed":%s,"rolled_back":%s,"ota":"%s","progress":%u,"logs":%s,"heap_min":%lu,"stack":{"light":%u,"pir":%u,"schedule":%u,"ota":%u,"debug":%u},"crash":%s})",
+        static_cast<int>(version.size()), version.data(), info.chip, info.reset,
         static_cast<unsigned long>(info.uptime_s), info.confirmed ? "true" : "false", rolled_back.data(),
         info.ota, info.progress, info.logs ? "true" : "false", static_cast<unsigned long>(info.heap_min),
         info.stack.light, info.stack.pir, info.stack.schedule, info.stack.ota, info.stack.debug,

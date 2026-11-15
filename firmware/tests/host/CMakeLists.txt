@@ -7,9 +7,13 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(FIRMWARE ${CMAKE_CURRENT_LIST_DIR}/../..)
-set(CJSON ${FIRMWARE}/managed_components/espressif__cjson/cJSON)
-if(NOT EXISTS ${CJSON}/cJSON.c)
-    message(FATAL_ERROR "cJSON not found: run `idf.py build` once to download managed_components")
+# cJSON comes from whichever chip's project has been built at least once.
+find_path(CJSON cJSON.c
+          PATHS ${FIRMWARE}/c6/managed_components/espressif__cjson/cJSON
+                ${FIRMWARE}/s3/managed_components/espressif__cjson/cJSON
+          NO_DEFAULT_PATH)
+if(NOT CJSON)
+    message(FATAL_ERROR "cJSON not found: run `idf.py build` once in c6/ or s3/ to download managed_components")
 endif()
 
 add_executable(host_tests

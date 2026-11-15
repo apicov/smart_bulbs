@@ -441,6 +441,7 @@ void test_format_info() {
     const TaskStacks stack{.light = 1, .pir = 2, .schedule = 3, .ota = 4, .debug = 5};
     CHECK(
         text({.version = "abc1234",
+              .chip = "esp32c6",
               .reset = "power_on",
               .uptime_s = 60,
               .confirmed = true,
@@ -451,7 +452,7 @@ void test_format_info() {
               .heap_min = 1000,
               .stack = stack,
               .crash = std::nullopt}) ==
-        R"({"version":"abc1234","reset":"power_on","uptime":60,"confirmed":true,"rolled_back":null,"ota":"idle","progress":0,"logs":false,"heap_min":1000,"stack":{"light":1,"pir":2,"schedule":3,"ota":4,"debug":5},"crash":null})");
+        R"({"version":"abc1234","chip":"esp32c6","reset":"power_on","uptime":60,"confirmed":true,"rolled_back":null,"ota":"idle","progress":0,"logs":false,"heap_min":1000,"stack":{"light":1,"pir":2,"schedule":3,"ota":4,"debug":5},"crash":null})");
 
     CrashSummary crash;
     (void)std::snprintf(crash.task.data(), crash.task.size(), "main");
@@ -462,6 +463,7 @@ void test_format_info() {
     crash.value = 7;
     CHECK(
         text({.version = "v2",
+              .chip = "esp32s3",
               .reset = "crash",
               .uptime_s = 1,
               .confirmed = false,
@@ -485,6 +487,7 @@ void test_format_info() {
     big.pc = big.ra = big.cause = big.value = 0xFFFFFFFF;
     const unsigned most = 0xFFFFFFFF;
     const std::string json = text({.version = longest,
+                                   .chip = "esp32c61",  // the longest target name
                                    .reset = "power_on",
                                    .uptime_s = 0xFFFFFFFF,
                                    .confirmed = false,

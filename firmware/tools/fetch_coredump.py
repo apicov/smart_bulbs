@@ -8,8 +8,9 @@ Run from an activated ESP-IDF shell:
     python tools/fetch_coredump.py living-room --erase    # afterwards, clear it from the bulb
 
 Decoding needs the .elf of the firmware that crashed. tools/publish_firmware.py
-keeps those in releases/, and this finds the right one from the hash the bulb
-reports. Use --elf for a build that was flashed over USB.
+keeps those in releases/<project>/, and this finds the right one from the hash
+the bulb reports. Use --elf for a build that was flashed over USB. The chip
+comes from the bulb's info; firmware too old to say is an ESP32-C6.
 
 The password is prompted for. A core dump holds the contents of the bulb's task
 stacks and can include its passwords, so it's saved privately, and git ignores it.
@@ -27,7 +28,8 @@ import sys
 import time
 from pathlib import Path
 
-FIRMWARE = Path(__file__).resolve().parent.parent
+from projects import FIRMWARE
+
 RELEASES = FIRMWARE / "releases"
 TOPIC_PREFIX = "pico/bulb"
 TIMEOUT_S = 30  # for each message to arrive
@@ -125,7 +127,7 @@ def collect(mqtt: Mqtt, root: str) -> tuple[dict, bytes | None]:
 
 def find_elf(prefix: str) -> Path | None:
     """The released .elf whose hash starts with `prefix`."""
-    for elf in RELEASES.glob("*/*.elf"):
+    for elf in RELEASES.glob("*/*/*.elf"):  # releases/<project>/<version>/
         if hashlib.sha256(elf.read_bytes()).hexdigest().startswith(prefix):
             return elf
     return None
@@ -177,7 +179,8 @@ def main() -> int:
               "Use --elf with the build that crashed to decode it.", file=sys.stderr)
         return 1
     action = "dbg_corefile" if args.gdb else "info_corefile"
-    command = [sys.executable, "-m", "esp_coredump", "--chip", "esp32c6", action,
+    chip = info.get("chip", "esp32c6")  # firmware from before "chip" was reported is all C6
+    command = [sys.executable, "-m", "esp_coredump", "--chip", chip, action,
                "--core", str(saved), "--core-format", "raw", str(elf)]
     return subprocess.run(command, check=False).returncode
 
