@@ -1,0 +1,39 @@
+# Seeed XIAO ESP32-S3 Sense: 8 MB flash, 8 MB octal PSRAM.
+# The bulb settings (LED GPIO1/D0 as WS2811, PIR GPIO2/D1, no current limit,
+# pico-bulb-s3.bin) are the S3 defaults in components/bulb_node/Kconfig.projbuild.
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# PSRAM, opt-in per allocation: the camera's frame buffers go there.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_CAPS_ALLOC=y
+
+# The console is the chip's own USB Serial/JTAG: the board has no UART bridge.
+# The USB and WiFi PHYs interfere on the S3, and with a USB console IDF keeps
+# the USB PHY on, which costs some radio performance. Fine for a lamp; see
+# ~/code/esp32_projects/dancefloor/satellite/sdkconfig.defaults.esp32s3 for the
+# UART alternative if WiFi turns out weak.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# TLS to the broker, verified with the built-in CA bundle (includes Let's Encrypt)
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
+
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+
+# OTA: a new image must prove itself, or the bootloader goes back to the old one.
+# This goes in the bootloader, which OTA can't change, so it has to be there from the start.
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+
+# Updates must be signed with our key, kept out of git in firmware/keys/. Burns no eFuses.
+CONFIG_SECURE_SIGNED_APPS_NO_SECURE_BOOT=y
+CONFIG_SECURE_SIGNED_ON_UPDATE_NO_SECURE_BOOT=y
+CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES=y
+CONFIG_SECURE_BOOT_SIGNING_KEY="../keys/signing.pem"
+
+# Keep a crash report in flash, to read later over WiFi.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y

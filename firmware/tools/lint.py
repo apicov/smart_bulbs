@@ -30,6 +30,7 @@ SOURCE_GLOBS = ["components/**/*.cpp", "components/**/*.hpp", "*/main/**/*.cpp",
 DROP = re.compile(
     r"-fstrict-volatile-bitfields|-fno-tree-switch-conversion|-fno-shrink-wrap|-fno-jump-tables"
     r"|-fmacro-prefix-map=.*|-fdiagnostics-color.*|-W.*|-specs=.*|-nostartfiles|-mno-.*|-mtune=.*"
+    r"|-mlongcalls|-mdisable-hardware-atomics|-mtext-section-literals|-mdynconfig=.*"  # Xtensa GCC only
 )
 
 
