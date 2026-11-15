@@ -18,8 +18,5 @@ dependencies:
     version: "^1.0.13"
     rules:
       - if: "target in [esp32s3]"
-  # ST's VL53L1X ULP API ported to the new driver; takes i2cdev's bus handle.
-  grrtzm/vl53l1x_library:
-    version: "^0.3.1"
-    rules:
-      - if: "target in [esp32s3]"
+  # The VL53L1X driver, grrtzm/vl53l1x_library, is vendored in ../vl53l1x_library
+  # with a fix for its I2C timeouts.

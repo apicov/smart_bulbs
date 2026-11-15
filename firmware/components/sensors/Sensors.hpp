@@ -20,7 +20,8 @@ extern "C" {
 
 /**
  * C++ wrappers for the I2C sensors, over the maintained esp-idf-lib drivers
- * (VEML7700, TSL2591, SCD30) and grrtzm/vl53l1x_library (ST's VL53L1X ULP API).
+ * (VEML7700, TSL2591, SCD30) and grrtzm/vl53l1x_library (ST's VL53L1X ULP API, vendored
+ * in ../vl53l1x_library with bounded I2C timeouts).
  *
  * All share one bus, which esp-idf-lib's i2cdev owns. Each wrapper keeps its
  * driver's device descriptor inside itself, and i2cdev holds a pointer to it,
