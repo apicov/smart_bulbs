@@ -41,7 +41,7 @@ endchoice
 config BULB_LED_COUNT
     int "Number of LEDs (tools/provision.py can override this per bulb)"
     range 1 1024
-    default 2
+    default 3
 
 config BULB_MA_PER_CHANNEL
     int "Current per colour channel at full brightness, in mA"

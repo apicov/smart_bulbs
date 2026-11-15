@@ -48,7 +48,7 @@ It asks for the WiFi and MQTT passwords, so they stay out of your shell history.
 | `--wifi-ssid` | A **2.4 GHz** network (the C6 has no 5 GHz) |
 | `--mqtt-uri` | `mqtts://mqtt.apicov.xyz:8883` |
 | `--max-ma` | Optional. `450` when powered over USB; see [wiring](01-wiring.md) |
-| `--led-count` | Optional, if the bulb doesn't have 2 LEDs |
+| `--led-count` | Optional, if the bulb doesn't have 3 LEDs |
 | `--port` | Optional, if the serial port isn't found automatically |
 
 To change a setting, run it again with all the values. Saved colours and alarms aren't touched. A bulb with no settings still works as a plain lamp and logs `Not provisioned`.
@@ -65,7 +65,7 @@ python tools/provision.py --from sdkconfig.defaults.local
 
 ```
 main: Bulb id: living-room (topics pico/bulb/living-room/*)
-light_engine: Started: 2 LEDs on GPIO18, limit 450 mA     ← strip fades up to warm white
+light_engine: Started: 3 LEDs on GPIO18, limit 450 mA     ← strip fades up to warm white
 wifi_station: Got IP 192.168.x.x
 mqtt_client: Connected to broker
 main: Lowest free stack: light 2800 B, pir 1500 B, schedule 2000 B, ota 7500 B, debug 4000 B   ← your numbers will differ

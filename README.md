@@ -38,7 +38,7 @@ mosquitto_pub … -t pico/bulb/living-room/cmd -m '{"cmd":"ota"}'
 
 See [Update over WiFi](docs/03-firmware.md#update-over-wifi) for the full command and [Debug a bulb remotely](docs/03-firmware.md#debug-a-bulb-remotely) for logs and crash reports.
 
-Default wiring: LED data on GPIO18, PIR on GPIO19, 2 RGBW LEDs at 200 mA per channel, 1800 mA current cap. Change the pins in `idf.py menuconfig` under "Pico Bulb". The LED count and current cap can also be set per bulb with `tools/provision.py`.
+Default wiring: LED data on GPIO18, PIR on GPIO19, 3 RGBW LEDs at 200 mA per channel, 1800 mA current cap. Change the pins in `idf.py menuconfig` under "Pico Bulb". The LED count and current cap can also be set per bulb with `tools/provision.py`.
 
 ## Server
 
