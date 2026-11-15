@@ -5,7 +5,7 @@
 | Part | Notes |
 |------|-------|
 | Waveshare **ESP32-C6-Zero** | USB-C is used for power and flashing |
-| 2× 4 W **RGBW** NeoPixel LEDs | Adafruit 5163, 5V, GRBW order |
+| 2× 4 W **RGBW** NeoPixel LEDs | Adafruit 5163, 5V, RGBW order |
 | **HC-SR505** mini PIR | Runs on 4.5–20V. Output is HIGH (~3.3V) on motion and holds for ~8 s |
 | 330 Ω resistor | In series with the LED data line |
 | 1000 µF / ≥6.3V capacitor | Across the strip's 5V and GND |

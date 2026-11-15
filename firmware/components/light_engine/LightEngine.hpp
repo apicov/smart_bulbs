@@ -18,7 +18,7 @@ class LightEngine {
 public:
     enum class LedType : uint8_t {
         RGB,   ///< WS2812B, GRB order
-        RGBW,  ///< SK6812 RGBW, GRBW order
+        RGBW,  ///< RGBW order, e.g. Adafruit 5163
     };
 
     struct Config {

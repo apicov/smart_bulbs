@@ -27,7 +27,7 @@ esp_err_t LightEngine::start(const Config& cfg) {
     // Kept as WS2812 for SK6812 too: the SPI backend sends the same bit timing for every
     // model (0.4/0.8 us high), which SK6812s accept, and other models only log a warning.
     strip_cfg.led_model = LED_MODEL_WS2812;
-    strip_cfg.color_component_format = cfg.led_type == LedType::RGBW ? LED_STRIP_COLOR_COMPONENT_FMT_GRBW
+    strip_cfg.color_component_format = cfg.led_type == LedType::RGBW ? LED_STRIP_COLOR_COMPONENT_FMT_RGBW
                                                                      : LED_STRIP_COLOR_COMPONENT_FMT_GRB;
 
     // SPI with DMA, not RMT: a frame goes out in one transfer, so it's less exposed to

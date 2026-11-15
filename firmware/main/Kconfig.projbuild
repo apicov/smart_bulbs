@@ -35,7 +35,7 @@ config BULB_LED_TYPE_RGB
     bool "RGB (WS2812B, GRB order)"
 
 config BULB_LED_TYPE_RGBW
-    bool "RGBW (SK6812, GRBW order)"
+    bool "RGBW (RGBW order, e.g. Adafruit 5163)"
 endchoice
 
 config BULB_LED_COUNT
