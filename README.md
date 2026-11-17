@@ -25,7 +25,7 @@ python tools/provision.py --id living-room --wifi-ssid my-wifi --mqtt-uri mqtts:
 (cd c6 && idf.py monitor)
 ```
 
-For the XIAO ESP32-S3 Sense node, use `s3` and `esp32s3` instead, and add `--project s3` to the tools.
+For the XIAO ESP32-S3 Sense node, use `s3` and `esp32s3` instead, and add `--project s3` to the tools. Its parts, pins and setup are in [firmware/s3/README.md](firmware/s3/README.md).
 
 Create `firmware/keys/` first if it doesn't exist. See [docs/03-firmware.md](docs/03-firmware.md) for the details.
 
